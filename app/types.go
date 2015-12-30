@@ -1,9 +1,11 @@
 package governmint
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/tendermint/go-crypto"
+	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
 )
 
@@ -15,7 +17,7 @@ type Entity struct {
 }
 
 type Member struct {
-	*Entity
+	Entity      []byte
 	VotingPower int
 }
 
@@ -27,18 +29,27 @@ type Group struct {
 }
 
 type Proposal struct {
-	Data string
-	*Group
-	Votes []crypto.Signature // same order as Group.Members
+	Data  string
+	Group []byte
+	Votes []Vote // same order as Group.Members
 
-	passed bool
+	votesFor     int
+	votesAgainst int
+}
+
+type Vote struct {
+	Vote      bool
+	Signature crypto.Signature
 }
 
 //-----------------------------
 
+type SignedTx struct {
+	Tx        Tx               `json:"tx"`
+	Signature crypto.Signature `json:"signature"`
+}
+
 type Tx interface {
-	// TODO
-	// WriteSignBytes(chainID string, w io.Writer, n *int64, err *error)
 }
 
 const (
@@ -52,18 +63,26 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{VoteTx{}, txTypeVote},
 )
 
+func SignBytes(tx Tx) []byte {
+	buf := new(bytes.Buffer)
+	var err error
+	var n int
+	wire.WriteBinary(tx, buf, &n, &err)
+	return buf.Bytes()
+}
+
+func TxID(tx Tx) []byte {
+	return merkle.SimpleHashFromBinary(SignBytes(tx))
+}
+
 type ProposalTx struct {
 	Data     string `json:"data"`
-	Group    string `json:"group"`
-	Proposer string `json:"proposer"`
-
-	Signature crypto.Signature `json:"signature"`
+	Group    []byte `json:"group"`
+	Proposer []byte `json:"proposer"`
 }
 
 type VoteTx struct {
-	Proposal string `json:"proposal"`
+	Proposal []byte `json:"proposal"`
 	Vote     bool   `json:"vote"`
-	Member   string `json:"member"`
-
-	Signature crypto.Signature `json:"signature"`
+	Member   int    `json:"member"`
 }

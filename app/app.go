@@ -37,8 +37,10 @@ func (dapp *GovernmintApplication) Open() types.AppContext {
 	dapp.mtx.Lock()
 	defer dapp.mtx.Unlock()
 	return &GovernmintAppContext{
-		app:   dapp,
-		state: dapp.state.Copy(),
+		app: dapp,
+		Governmint: &Governmint{
+			state: dapp.state.Copy(),
+		},
 	}
 }
 
@@ -57,86 +59,72 @@ func (dapp *GovernmintApplication) getState() merkle.Tree {
 //--------------------------------------------------------------------------------
 
 type GovernmintAppContext struct {
-	app   *GovernmintApplication
-	state merkle.Tree
-
-	members   map[string]*Member
-	groups    map[string]*Group
-	proposals map[string]*Proposal
+	app *GovernmintApplication
+	*Governmint
 }
 
-func (dac *GovernmintAppContext) Echo(message string) string {
+func (gov *GovernmintAppContext) Echo(message string) string {
 	return message
 }
 
-func (dac *GovernmintAppContext) Info() []string {
-	return []string{Fmt("members:%d, groups:%d, proposals:%d", len(dac.members), len(dac.groups), len(dac.proposals))}
+func (gov *GovernmintAppContext) Info() []string {
+	return []string{Fmt("")}
 }
 
-func (dac *GovernmintAppContext) SetOption(key string, value string) types.RetCode {
+func (gov *GovernmintAppContext) SetOption(key string, value string) types.RetCode {
 	return 0
 }
 
-func (dac *GovernmintAppContext) AppendTx(txBytes []byte) ([]types.Event, types.RetCode) {
-	var tx Tx
+func (gov *GovernmintAppContext) AppendTx(txBytes []byte) ([]types.Event, types.RetCode) {
+	var tx SignedTx
 	var n int
 	var err error
 	wire.ReadBinary(&tx, bytes.NewBuffer(txBytes), 0, &n, &err)
 	if err != nil {
 		return nil, types.RetCodeEncodingError
 	}
-	switch tx_ := tx.(type) {
+
+	var retCode types.RetCode
+	switch tx_ := tx.Tx.(type) {
 	case *ProposalTx:
-		err = dac.addProposal(tx_)
+		retCode = gov.addProposal(tx_, tx.Signature)
 	case *VoteTx:
-		err = dac.addVote(tx_)
+		retCode = gov.addVote(tx_, tx.Signature)
 	default:
-		// TODO: invite and group txs?
-		return nil, types.RetCodeUnknownRequest
+		retCode = types.RetCodeUnknownRequest
 	}
 
-	if err != nil {
-		return nil, types.RetCodeInternalError
-	}
-	return nil, 0
+	return nil, retCode
 }
 
-func (dac *GovernmintAppContext) GetHash() ([]byte, types.RetCode) {
+func (gov *GovernmintAppContext) GetHash() ([]byte, types.RetCode) {
 	// TODO  ...
 
-	hash := dac.state.Hash()
+	hash := gov.state.Hash()
 	return hash, 0
 }
 
-func (dac *GovernmintAppContext) Commit() types.RetCode {
+func (gov *GovernmintAppContext) Commit() types.RetCode {
 	// TODO ...
-	dac.app.commitState(dac.state)
+	gov.app.commitState(gov.state)
 	return 0
 }
 
-func (dac *GovernmintAppContext) Rollback() types.RetCode {
-	dac.state = dac.app.getState()
+func (gov *GovernmintAppContext) Rollback() types.RetCode {
+	gov.state = gov.app.getState()
 	return 0
 }
 
-func (dac *GovernmintAppContext) AddListener(key string) types.RetCode {
+func (gov *GovernmintAppContext) AddListener(key string) types.RetCode {
 	return 0
 }
 
-func (dac *GovernmintAppContext) RemListener(key string) types.RetCode {
+func (gov *GovernmintAppContext) RemListener(key string) types.RetCode {
 	return 0
 }
 
-func (dac *GovernmintAppContext) Close() error {
+func (gov *GovernmintAppContext) Close() error {
 	return nil
 }
 
 //--------------------------------------------------------
-
-func (dac *GovernmintAppContext) addProposal(tx *ProposalTx) error {
-	return nil
-}
-
-func (dac *GovernmintAppContext) addVote(tx *VoteTx) error {
-	return nil
-}
