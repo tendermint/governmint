@@ -6,10 +6,8 @@ import (
 	"github.com/tendermint/tmsp/types"
 )
 
-// Governmint is a merkle tree of entities, groups, proposals
-type Governmint struct {
-	state merkle.Tree
-}
+//----------------------------------------
+// prefixes for putting everything in one merkle tree
 
 func PrefixEntityKey(id []byte) []byte {
 	return append([]byte("entity-"), id...)
@@ -25,6 +23,13 @@ func PrefixProposalKey(id []byte) []byte {
 
 func PrefixResolutionKey(id []byte) []byte {
 	return append([]byte("resolution-"), id...)
+}
+
+//----------------------------------------
+
+// Governmint is a merkle tree of entities, groups, proposals
+type Governmint struct {
+	state merkle.Tree
 }
 
 // Entities
@@ -101,7 +106,7 @@ func (g *Governmint) RmResolution(id []byte) {
 
 //----------------------------------------------------------------
 
-func (gov *GovernmintAppContext) addProposal(tx *ProposalTx, sig crypto.Signature) types.RetCode {
+func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.RetCode {
 
 	// check sig
 	m := gov.GetEntity(tx.Proposer)
@@ -119,7 +124,7 @@ func (gov *GovernmintAppContext) addProposal(tx *ProposalTx, sig crypto.Signatur
 	}
 
 	var group *Group
-	if group = gov.GetGroup(p.Group); group == nil {
+	if group = gov.GetGroup(tx.Group); group == nil {
 		return types.RetCodeUnauthorized //fmt.Errorf("Group does not exist")
 	}
 
@@ -132,7 +137,7 @@ func (gov *GovernmintAppContext) addProposal(tx *ProposalTx, sig crypto.Signatur
 	return types.RetCodeOK
 }
 
-func (gov *GovernmintAppContext) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
+func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
 	p := gov.GetProposal(tx.Proposal)
 	if p == nil {
 		return types.RetCodeUnauthorized //fmt.Errorf("Proposal does not exist")

@@ -1,7 +1,6 @@
 package governmint
 
 import (
-	"bytes"
 	"sync"
 
 	. "github.com/tendermint/go-common"
@@ -77,9 +76,8 @@ func (gov *GovernmintAppContext) SetOption(key string, value string) types.RetCo
 
 func (gov *GovernmintAppContext) AppendTx(txBytes []byte) ([]types.Event, types.RetCode) {
 	var tx SignedTx
-	var n int
 	var err error
-	wire.ReadBinary(&tx, bytes.NewBuffer(txBytes), 0, &n, &err)
+	wire.ReadJSON(&tx, txBytes, &err)
 	if err != nil {
 		return nil, types.RetCodeEncodingError
 	}

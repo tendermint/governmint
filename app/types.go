@@ -63,6 +63,14 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{VoteTx{}, txTypeVote},
 )
 
+func Hash(o interface{}) []byte {
+	buf := new(bytes.Buffer)
+	var err error
+	var n int
+	wire.WriteBinary(o, buf, &n, &err)
+	return merkle.SimpleHashFromBinary(buf.Bytes())
+}
+
 func SignBytes(tx Tx) []byte {
 	buf := new(bytes.Buffer)
 	var err error
