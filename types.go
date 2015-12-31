@@ -99,7 +99,7 @@ func Hash(o interface{}) []byte {
 	buf := new(bytes.Buffer)
 	var err error
 	var n int
-	wire.WriteBinary(o, buf, &n, &err)
+	wire.WriteJSON(o, buf, &n, &err)
 	return merkle.SimpleHashFromBinary(buf.Bytes())
 }
 
@@ -107,12 +107,8 @@ func SignBytes(tx Tx) []byte {
 	buf := new(bytes.Buffer)
 	var err error
 	var n int
-	wire.WriteBinary(tx, buf, &n, &err)
+	wire.WriteJSON(tx, buf, &n, &err)
 	return buf.Bytes()
-}
-
-func TxID(tx Tx) []byte {
-	return merkle.SimpleHashFromBinary(SignBytes(tx))
 }
 
 type ProposalTx struct {

@@ -205,9 +205,11 @@ func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.R
 	// check sig
 	m := gov.GetEntity(tx.ProposerID)
 	if m == nil {
+		log.Debug("Unknown proposer", "id", tx.ProposerID)
 		return types.RetCodeUnauthorized
 	}
 	if !m.PubKey.VerifyBytes(SignBytes(tx), sig) {
+		log.Debug("Invalid signature", "signbytes", SignBytes(tx), "pub", m.PubKey)
 		return types.RetCodeUnauthorized
 	}
 
@@ -215,11 +217,13 @@ func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.R
 	id := p.ID()
 
 	if p2 := gov.GetProposal(id); p2 != nil {
+		log.Debug("Proposal already exists", "id", []byte(id))
 		return types.RetCodeUnauthorized //fmt.Errorf("Proposal already exists")
 	}
 
 	var group *Group
 	if group = gov.GetGroup(tx.GroupID); group == nil {
+		log.Debug("Group does not exist", "id", tx.GroupID)
 		return types.RetCodeUnauthorized //fmt.Errorf("Group does not exist")
 	}
 
@@ -232,22 +236,26 @@ func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.R
 func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
 	p := gov.GetProposal(tx.ProposalID)
 	if p == nil {
+		log.Debug("Proposal does not exist", "id", []byte(tx.ProposalID))
 		return types.RetCodeUnauthorized //fmt.Errorf("Proposal does not exist")
 	}
 
 	gr := gov.GetGroup(p.GroupID)
 
 	if tx.Member > len(gr.Members) {
+		log.Debug("Invalid member index", "index", tx.Member)
 		return types.RetCodeUnauthorized //fmt.Errorf("Invalid member index")
 	}
 
 	// check sig
 	m := gr.Members[tx.Member]
 	if m == nil {
+		log.Debug("Invalid member initialization", "index", tx.Member)
 		return types.RetCodeUnauthorized
 	}
 	entity := gov.GetEntity(m.EntityID)
 	if !entity.PubKey.VerifyBytes(SignBytes(tx), sig) {
+		log.Debug("Invalid signawture")
 		return types.RetCodeUnauthorized
 	}
 

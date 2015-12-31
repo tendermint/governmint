@@ -64,24 +64,23 @@ func (gov *GovernmintAppContext) SetOption(key string, value string) types.RetCo
 func (gov *GovernmintAppContext) AppendTx(txBytes []byte) ([]types.Event, types.RetCode) {
 	var tx SignedTx
 	var err error
-	log.Warn(string(txBytes))
 	wire.ReadJSON(&tx, txBytes, &err)
 	if err != nil {
-		log.Error("Encoding error", "error", err)
+		log.Debug("Encoding error", "error", err)
 		return nil, types.RetCodeEncodingError
 	}
 
 	var retCode types.RetCode
 	switch tx_ := tx.Tx.(type) {
-	case *ProposalTx:
-		retCode = gov.addProposal(tx_, tx.Signature)
-	case *VoteTx:
-		retCode = gov.addVote(tx_, tx.Signature)
+	case ProposalTx:
+		retCode = gov.addProposal(&tx_, tx.Signature)
+	case VoteTx:
+		retCode = gov.addVote(&tx_, tx.Signature)
 	default:
 		retCode = types.RetCodeUnknownRequest
 	}
 
-	log.Warn("RetCode", retCode)
+	log.Debug("Done append tx", "retCode", retCode)
 	return nil, retCode
 }
 
