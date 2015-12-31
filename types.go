@@ -9,32 +9,46 @@ import (
 	"github.com/tendermint/go-wire"
 )
 
+//-------------
+// Entities, Groups, and Proposals are Get/Set/Rm able on Governmint by their ID()
+
 type Entity struct {
-	Name      string
+	Name      string // Unique
 	PubKey    crypto.PubKey
 	InvitedBy string
 	Invites   int
 }
 
+func (e *Entity) ID() []byte {
+	return []byte(e.Name)
+}
+
 type Member struct {
-	Entity      []byte
+	EntityID    []byte
 	VotingPower int
 }
 
 type Group struct {
-	Name        string // XXX Unique constraints?
+	Name        string // Unique
 	Version     int
 	LastUpdated time.Time
 	Members     []*Member
 }
 
-type Proposal struct {
-	Data  string
-	Group []byte
-	Votes []Vote // same order as Group.Members
+func (g *Group) ID() []byte {
+	return []byte(g.Name)
+}
 
+type Proposal struct {
+	*ProposalTx
+
+	Votes        []Vote // same order as Group.Members
 	votesFor     int
 	votesAgainst int
+}
+
+func (p *Proposal) ID() []byte {
+	return Hash(p.ProposalTx)
 }
 
 type Vote struct {
@@ -84,13 +98,13 @@ func TxID(tx Tx) []byte {
 }
 
 type ProposalTx struct {
-	Data     string `json:"data"`
-	Group    []byte `json:"group"`
-	Proposer []byte `json:"proposer"`
+	Data       string `json:"data"`
+	GroupID    []byte `json:"group"`
+	ProposerID []byte `json:"proposer"`
 }
 
 type VoteTx struct {
-	Proposal []byte `json:"proposal"`
-	Vote     bool   `json:"vote"`
-	Member   int    `json:"member"`
+	ProposalID []byte `json:"proposal"`
+	Vote       bool   `json:"vote"`
+	Member     int    `json:"member"` // member's position in the group
 }

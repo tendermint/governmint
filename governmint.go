@@ -110,7 +110,7 @@ func (g *Governmint) RmResolution(id []byte) {
 func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.RetCode {
 
 	// check sig
-	m := gov.GetEntity(tx.Proposer)
+	m := gov.GetEntity(tx.ProposerID)
 	if m == nil {
 		return types.RetCodeUnauthorized
 	}
@@ -118,33 +118,30 @@ func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.R
 		return types.RetCodeUnauthorized
 	}
 
-	id := TxID(tx)
-	var p *Proposal
-	if p = gov.GetProposal(id); p != nil {
+	p := &Proposal{ProposalTx: tx}
+	id := p.ID()
+
+	if p2 := gov.GetProposal(id); p2 != nil {
 		return types.RetCodeUnauthorized //fmt.Errorf("Proposal already exists")
 	}
 
 	var group *Group
-	if group = gov.GetGroup(tx.Group); group == nil {
+	if group = gov.GetGroup(tx.GroupID); group == nil {
 		return types.RetCodeUnauthorized //fmt.Errorf("Group does not exist")
 	}
 
-	prop := &Proposal{
-		Data:  tx.Data,
-		Group: tx.Group,
-		Votes: make([]Vote, len(group.Members)),
-	}
-	gov.SetProposal(id, prop)
+	p.Votes = make([]Vote, len(group.Members))
+	gov.SetProposal(id, p)
 	return types.RetCodeOK
 }
 
 func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
-	p := gov.GetProposal(tx.Proposal)
+	p := gov.GetProposal(tx.ProposalID)
 	if p == nil {
 		return types.RetCodeUnauthorized //fmt.Errorf("Proposal does not exist")
 	}
 
-	gr := gov.GetGroup(p.Group)
+	gr := gov.GetGroup(p.GroupID)
 
 	if tx.Member > len(gr.Members) {
 		return types.RetCodeUnauthorized //fmt.Errorf("Invalid member index")
@@ -155,7 +152,7 @@ func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
 	if m == nil {
 		return types.RetCodeUnauthorized
 	}
-	entity := gov.GetEntity(m.Entity)
+	entity := gov.GetEntity(m.EntityID)
 	if !entity.PubKey.VerifyBytes(SignBytes(tx), sig) {
 		return types.RetCodeUnauthorized
 	}
@@ -164,14 +161,14 @@ func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
 	if tx.Vote {
 		p.votesFor += 1
 		if p.votesFor > len(p.Votes)/2 {
-			gov.RmProposal(tx.Proposal)
-			gov.SetResolution(tx.Proposal, p)
+			gov.RmProposal(tx.ProposalID)
+			gov.SetResolution(tx.ProposalID, p)
 		}
 	} else {
 		p.votesAgainst += 1
 		if p.votesAgainst > len(p.Votes)/2 {
-			gov.RmProposal(tx.Proposal)
-			gov.SetResolution(tx.Proposal, p)
+			gov.RmProposal(tx.ProposalID)
+			gov.SetResolution(tx.ProposalID, p)
 		}
 	}
 	return types.RetCodeOK

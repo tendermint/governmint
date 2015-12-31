@@ -79,9 +79,9 @@ func newGovernmint() testGovernmint {
 
 func newVoteTx(propId []byte, vote bool, member int) *VoteTx {
 	return &VoteTx{
-		Proposal: propId,
-		Vote:     vote,
-		Member:   member,
+		ProposalID: propId,
+		Vote:       vote,
+		Member:     member,
 	}
 }
 
@@ -92,9 +92,9 @@ func TestProposalTx(t *testing.T) {
 
 	// invalid group
 	badProp := &ProposalTx{
-		Data:     "bernie sanders for pres",
-		Group:    append(Hash(gov.group), byte(1)),
-		Proposer: gov.group.Members[0].Entity,
+		Data:       "bernie sanders for pres",
+		GroupID:    append(Hash(gov.group), byte(1)),
+		ProposerID: gov.group.Members[0].EntityID,
 	}
 	sig := gov.entities[0].key.Sign(SignBytes(badProp))
 	if retCode := gov.gov.addProposal(badProp, sig); retCode == 0 {
@@ -109,9 +109,9 @@ func TestProposalTx(t *testing.T) {
 
 	// a good proposal to add twice
 	goodProp := &ProposalTx{
-		Data:     "bernie sanders for pres",
-		Group:    Hash(gov.group),
-		Proposer: gov.group.Members[0].Entity,
+		Data:       "bernie sanders for pres",
+		GroupID:    Hash(gov.group),
+		ProposerID: gov.group.Members[0].EntityID,
 	}
 	sig = gov.entities[0].key.Sign(SignBytes(goodProp))
 	if retCode := gov.gov.addProposal(goodProp, sig); retCode != 0 {
@@ -127,9 +127,9 @@ func TestVoteTx(t *testing.T) {
 
 	// add a proposal
 	propTx := &ProposalTx{
-		Data:     "bernie sanders for pres",
-		Group:    Hash(gov.group),
-		Proposer: gov.group.Members[0].Entity,
+		Data:       "bernie sanders for pres",
+		GroupID:    Hash(gov.group),
+		ProposerID: gov.group.Members[0].EntityID,
 	}
 	propId := TxID(propTx)
 	sig := gov.entities[0].key.Sign(SignBytes(propTx))
