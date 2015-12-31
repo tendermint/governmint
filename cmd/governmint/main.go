@@ -2,14 +2,14 @@ package main
 
 import (
 	. "github.com/tendermint/go-common"
-	app "github.com/tendermint/governmint/app"
+	gov "github.com/tendermint/governmint"
 	"github.com/tendermint/tmsp/server"
 )
 
 func main() {
 
 	// Start the listener
-	_, err := server.StartListener("tcp://0.0.0.0:46658", app.NewGovernmintApplication())
+	_, err := server.StartListener("tcp://0.0.0.0:46658", gov.NewGovernmintApplication())
 	if err != nil {
 		Exit(err.Error())
 	}
