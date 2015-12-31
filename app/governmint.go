@@ -105,6 +105,7 @@ func (g *Governmint) RmResolution(id []byte) {
 }
 
 //----------------------------------------------------------------
+// tx processing
 
 func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.RetCode {
 
