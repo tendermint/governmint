@@ -72,12 +72,12 @@ func newGovernmint() testGovernmint {
 		Name:    "the_group",
 		Members: membersFromEntities(entities),
 	}
-	gov.SetGroup(Hash(group), group)
+	gov.SetGroup(group.ID(), group)
 
 	return testGovernmint{gov, entities, keys, group}
 }
 
-func newVoteTx(propId []byte, vote bool, member int) *VoteTx {
+func newVoteTx(propId string, vote bool, member int) *VoteTx {
 	return &VoteTx{
 		ProposalID: propId,
 		Vote:       vote,

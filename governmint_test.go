@@ -12,7 +12,7 @@ func TestProposalTx(t *testing.T) {
 	// invalid group
 	badProp := &ProposalTx{
 		Data:       "bernie sanders for pres",
-		GroupID:    append(Hash(gov.group), byte(1)),
+		GroupID:    gov.group.ID() + "-bad",
 		ProposerID: gov.group.Members[0].EntityID,
 	}
 	sig := gov.keys[0].Sign(SignBytes(badProp))
@@ -29,7 +29,7 @@ func TestProposalTx(t *testing.T) {
 	// a good proposal to add twice
 	goodProp := &ProposalTx{
 		Data:       "bernie sanders for pres",
-		GroupID:    Hash(gov.group),
+		GroupID:    gov.group.ID(),
 		ProposerID: gov.group.Members[0].EntityID,
 	}
 	sig = gov.keys[0].Sign(SignBytes(goodProp))
@@ -47,10 +47,10 @@ func TestVoteTx(t *testing.T) {
 	// add a proposal
 	propTx := &ProposalTx{
 		Data:       "bernie sanders for pres",
-		GroupID:    Hash(gov.group),
+		GroupID:    gov.group.ID(),
 		ProposerID: gov.group.Members[0].EntityID,
 	}
-	propId := TxID(propTx)
+	propId := string(TxID(propTx))
 	sig := gov.keys[0].Sign(SignBytes(propTx))
 	if retCode := gov.gov.addProposal(propTx, sig); retCode != 0 {
 		t.Fatal("expected addProposal to pass")

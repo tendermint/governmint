@@ -2,11 +2,11 @@ package governmint
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 
+	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
@@ -16,20 +16,20 @@ import (
 //----------------------------------------
 // prefixes for putting everything in one merkle tree
 
-func PrefixEntityKey(id []byte) []byte {
-	return append([]byte("entity-"), id...)
+func PrefixEntityKey(id string) string {
+	return "entity-" + id
 }
 
-func PrefixGroupKey(id []byte) []byte {
-	return append([]byte("group-"), id...)
+func PrefixGroupKey(id string) string {
+	return "group-" + id
 }
 
-func PrefixProposalKey(id []byte) []byte {
-	return append([]byte("proposal-"), id...)
+func PrefixProposalKey(id string) string {
+	return "proposal-" + id // note these may not be legible
 }
 
-func PrefixResolutionKey(id []byte) []byte {
-	return append([]byte("resolution-"), id...)
+func PrefixResolutionKey(id string) string {
+	return "resolution-" + id // note these may not be legible
 }
 
 func jsonEncoder(o interface{}, w io.Writer, n *int, err *error) {
@@ -82,7 +82,7 @@ func (g *Governmint) Copy() *Governmint {
 }
 
 // Entities
-func (g *Governmint) GetEntity(id []byte) *Entity {
+func (g *Governmint) GetEntity(id string) *Entity {
 	_, v := g.state.Get(PrefixEntityKey(id))
 	if v == nil {
 		return nil
@@ -91,16 +91,16 @@ func (g *Governmint) GetEntity(id []byte) *Entity {
 	return v.(*Entity) //
 }
 
-func (g *Governmint) SetEntity(id []byte, e *Entity) {
+func (g *Governmint) SetEntity(id string, e *Entity) {
 	g.state.Set(PrefixEntityKey(id), e)
 }
 
-func (g *Governmint) RmEntity(id []byte) {
+func (g *Governmint) RmEntity(id string) {
 	g.state.Remove(PrefixEntityKey(id))
 }
 
 // Groups
-func (g *Governmint) GetGroup(id []byte) *Group {
+func (g *Governmint) GetGroup(id string) *Group {
 	_, v := g.state.Get(PrefixGroupKey(id))
 	if v == nil {
 		return nil
@@ -109,16 +109,16 @@ func (g *Governmint) GetGroup(id []byte) *Group {
 	return v.(*Group) //
 }
 
-func (g *Governmint) SetGroup(id []byte, gr *Group) {
+func (g *Governmint) SetGroup(id string, gr *Group) {
 	g.state.Set(PrefixGroupKey(id), gr)
 }
 
-func (g *Governmint) RmGroup(id []byte) {
+func (g *Governmint) RmGroup(id string) {
 	g.state.Remove(PrefixGroupKey(id))
 }
 
 // Proposals
-func (g *Governmint) GetProposal(id []byte) *Proposal {
+func (g *Governmint) GetProposal(id string) *Proposal {
 	_, v := g.state.Get(PrefixProposalKey(id))
 	if v == nil {
 		return nil
@@ -127,16 +127,16 @@ func (g *Governmint) GetProposal(id []byte) *Proposal {
 	return v.(*Proposal) //
 }
 
-func (g *Governmint) SetProposal(id []byte, p *Proposal) {
+func (g *Governmint) SetProposal(id string, p *Proposal) {
 	g.state.Set(PrefixProposalKey(id), p)
 }
 
-func (g *Governmint) RmProposal(id []byte) {
+func (g *Governmint) RmProposal(id string) {
 	g.state.Remove(PrefixProposalKey(id))
 }
 
 // Resolutions (closed proposals)
-func (g *Governmint) GetResolution(id []byte) *Proposal {
+func (g *Governmint) GetResolution(id string) *Proposal {
 	_, v := g.state.Get(PrefixResolutionKey(id))
 	if v == nil {
 		return nil
@@ -145,11 +145,11 @@ func (g *Governmint) GetResolution(id []byte) *Proposal {
 	return v.(*Proposal) //
 }
 
-func (g *Governmint) SetResolution(id []byte, p *Proposal) {
+func (g *Governmint) SetResolution(id string, p *Proposal) {
 	g.state.Set(PrefixResolutionKey(id), p)
 }
 
-func (g *Governmint) RmResolution(id []byte) {
+func (g *Governmint) RmResolution(id string) {
 	g.state.Remove(PrefixResolutionKey(id))
 }
 
@@ -193,7 +193,7 @@ func loadGovFromFile(govFile string) (*Governmint, error) {
 	}
 	gov.SetGroup(group.ID(), group)
 	hash := gov.state.Hash()
-	fmt.Printf("Governmint state hash: %X\n", hash)
+	log.Notice("Loaded state from file", "hash", hash)
 	return gov, nil
 }
 
@@ -225,6 +225,7 @@ func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.R
 
 	p.Votes = make([]Vote, len(group.Members))
 	gov.SetProposal(id, p)
+	log.Notice(Fmt("Added proposal %X", id))
 	return types.RetCodeOK
 }
 
@@ -264,5 +265,6 @@ func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
 			gov.SetResolution(tx.ProposalID, p)
 		}
 	}
+	log.Notice(Fmt("Added vote %v", tx))
 	return types.RetCodeOK
 }

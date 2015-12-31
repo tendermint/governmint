@@ -2,6 +2,7 @@ package governmint
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/tendermint/go-crypto"
@@ -36,12 +37,12 @@ type Entity struct {
 	Invites   int           `json:"invites"`
 }
 
-func (e *Entity) ID() []byte {
-	return []byte(e.Name)
+func (e *Entity) ID() string {
+	return e.Name
 }
 
 type Member struct {
-	EntityID    []byte `json:"entity_id"`
+	EntityID    string `json:"entity_id"`
 	VotingPower int    `json:"voting_power"`
 }
 
@@ -52,8 +53,8 @@ type Group struct {
 	Members     []*Member `json:"members"`
 }
 
-func (g *Group) ID() []byte {
-	return []byte(g.Name)
+func (g *Group) ID() string {
+	return g.Name
 }
 
 type Proposal struct {
@@ -64,8 +65,8 @@ type Proposal struct {
 	votesAgainst int
 }
 
-func (p *Proposal) ID() []byte {
-	return Hash(p.ProposalTx)
+func (p *Proposal) ID() string {
+	return string(Hash(p.ProposalTx))
 }
 
 type Vote struct {
@@ -116,12 +117,17 @@ func TxID(tx Tx) []byte {
 
 type ProposalTx struct {
 	Data       string `json:"data"`
-	GroupID    []byte `json:"group"`
-	ProposerID []byte `json:"proposer"`
+	GroupID    string `json:"group"`
+	ProposerID string `json:"proposer"`
 }
 
 type VoteTx struct {
-	ProposalID []byte `json:"proposal"`
+	ProposalID string `json:"proposal"`
 	Vote       bool   `json:"vote"`
 	Member     int    `json:"member"` // member's position in the group
+}
+
+func (tx *VoteTx) String() string {
+	return fmt.Sprintf("%X %v %d", []byte(tx.ProposalID), tx.Vote, tx.Member)
+
 }
