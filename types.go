@@ -11,12 +11,29 @@ import (
 
 //-------------
 // Entities, Groups, and Proposals are Get/Set/Rm able on Governmint by their ID()
+// They are GovernmintObjects
+
+type GovernmintObject interface {
+}
+
+const (
+	objTypeEntity   = byte(0x01)
+	objTypeGroup    = byte(0x02)
+	objTypeProposal = byte(0x03)
+)
+
+var _ = wire.RegisterInterface(
+	struct{ GovernmintObject }{},
+	wire.ConcreteType{&Entity{}, objTypeEntity},
+	wire.ConcreteType{&Group{}, objTypeGroup},
+	wire.ConcreteType{&Proposal{}, objTypeProposal},
+)
 
 type Entity struct {
-	Name      string // Unique
-	PubKey    crypto.PubKey
-	InvitedBy string
-	Invites   int
+	Name      string        `json:"name"` // Unique
+	PubKey    crypto.PubKey `json:"pub_key"`
+	InvitedBy string        `json:"invited_by"`
+	Invites   int           `json:"invites"`
 }
 
 func (e *Entity) ID() []byte {
@@ -24,15 +41,15 @@ func (e *Entity) ID() []byte {
 }
 
 type Member struct {
-	EntityID    []byte
-	VotingPower int
+	EntityID    []byte `json:"entity_id"`
+	VotingPower int    `json:"voting_power"`
 }
 
 type Group struct {
-	Name        string // Unique
-	Version     int
-	LastUpdated time.Time
-	Members     []*Member
+	Name        string    `json:"name"` // Unique
+	Version     int       `json:"version"`
+	LastUpdated time.Time `json:"last_updates"`
+	Members     []*Member `json:"members"`
 }
 
 func (g *Group) ID() []byte {

@@ -4,55 +4,42 @@ import (
 	"sync"
 
 	. "github.com/tendermint/go-common"
-	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
 	"github.com/tendermint/tmsp/types"
 )
 
 type GovernmintApplication struct {
 	mtx sync.Mutex
-
-	// contains state roots of trees for groups, members, proposals, resolutions
-	state merkle.Tree
-	/*
-		groups      merkle.Tree
-		members     merkle.Tree
-		proposals   merkle.Tree
-		resolutions merkle.Tree
-	*/
+	*Governmint
 }
 
-func NewGovernmintApplication() *GovernmintApplication {
-	state := merkle.NewIAVLTree(
-		wire.BasicCodec,
-		wire.BasicCodec,
-		0,
-		nil,
-	)
-	return &GovernmintApplication{state: state}
+func NewGovernmintApplication(govFile string) *GovernmintApplication {
+	gov, err := loadGovFromFile(govFile)
+	if err != nil {
+		Exit(err.Error())
+	}
+	return &GovernmintApplication{Governmint: gov}
 }
 
-func (dapp *GovernmintApplication) Open() types.AppContext {
-	dapp.mtx.Lock()
-	defer dapp.mtx.Unlock()
+func (govApp *GovernmintApplication) Open() types.AppContext {
+	govApp.mtx.Lock()
+	defer govApp.mtx.Unlock()
 	return &GovernmintAppContext{
-		app: dapp,
-		Governmint: &Governmint{
-			state: dapp.state.Copy(),
-		},
+		app:        govApp,
+		Governmint: govApp.Governmint.Copy(),
 	}
 }
 
-func (dapp *GovernmintApplication) commitState(state merkle.Tree) {
-	dapp.mtx.Lock()
-	defer dapp.mtx.Unlock()
-	dapp.state = state.Copy()
+func (govApp *GovernmintApplication) commitGov(gov *Governmint) {
+	govApp.mtx.Lock()
+	defer govApp.mtx.Unlock()
+	govApp.Governmint = gov.Copy()
 }
 
-func (dapp *GovernmintApplication) getState() merkle.Tree {
-	dapp.mtx.Lock()
-	defer dapp.mtx.Unlock()
-	return dapp.state.Copy()
+func (govApp *GovernmintApplication) getGov() *Governmint {
+	govApp.mtx.Lock()
+	defer govApp.mtx.Unlock()
+	return govApp.Governmint.Copy()
 }
 
 //--------------------------------------------------------------------------------
@@ -104,12 +91,12 @@ func (gov *GovernmintAppContext) GetHash() ([]byte, types.RetCode) {
 
 func (gov *GovernmintAppContext) Commit() types.RetCode {
 	// TODO ...
-	gov.app.commitState(gov.state)
+	gov.app.commitGov(gov.Governmint)
 	return 0
 }
 
 func (gov *GovernmintAppContext) Rollback() types.RetCode {
-	gov.state = gov.app.getState()
+	gov.Governmint = gov.app.getGov()
 	return 0
 }
 
