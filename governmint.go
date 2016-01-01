@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
@@ -72,7 +73,7 @@ func NewGovernmint() *Governmint {
 		0,
 		nil,
 	)
-	return &Governmint{state}
+	return &Governmint{state: state}
 }
 
 func (g *Governmint) Copy() *Governmint {
@@ -217,7 +218,12 @@ func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.R
 	id := p.ID()
 
 	if p2 := gov.GetProposal(id); p2 != nil {
-		log.Debug("Proposal already exists", "id", []byte(id))
+		log.Debug("Proposal already exists", "id", id)
+		return types.RetCodeUnauthorized //fmt.Errorf("Proposal already exists")
+	}
+
+	if r := gov.GetResolution(id); r != nil {
+		log.Debug("Proposal has already been resolved", "id", id)
 		return types.RetCodeUnauthorized //fmt.Errorf("Proposal already exists")
 	}
 
@@ -236,7 +242,7 @@ func (gov *Governmint) addProposal(tx *ProposalTx, sig crypto.Signature) types.R
 func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
 	p := gov.GetProposal(tx.ProposalID)
 	if p == nil {
-		log.Debug("Proposal does not exist", "id", []byte(tx.ProposalID))
+		log.Debug("Proposal does not exist", "id", tx.ProposalID)
 		return types.RetCodeUnauthorized //fmt.Errorf("Proposal does not exist")
 	}
 
@@ -265,14 +271,17 @@ func (gov *Governmint) addVote(tx *VoteTx, sig crypto.Signature) types.RetCode {
 		if p.votesFor > len(p.Votes)/2 {
 			gov.RmProposal(tx.ProposalID)
 			gov.SetResolution(tx.ProposalID, p)
+			log.Notice("Proposal -> Resolution", "id", p.ID())
 		}
 	} else {
 		p.votesAgainst += 1
 		if p.votesAgainst > len(p.Votes)/2 {
 			gov.RmProposal(tx.ProposalID)
 			gov.SetResolution(tx.ProposalID, p)
+			log.Notice("Proposal Vetoed", "id", p.ID())
 		}
 	}
+	gov.SetProposal(tx.ProposalID, p)
 	log.Notice(Fmt("Added vote %v", tx))
 	return types.RetCodeOK
 }

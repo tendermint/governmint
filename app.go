@@ -25,8 +25,8 @@ func (govApp *GovernmintApplication) Open() types.AppContext {
 	govApp.mtx.Lock()
 	defer govApp.mtx.Unlock()
 	return &GovernmintAppContext{
-		app:        govApp,
-		Governmint: govApp.Governmint.Copy(),
+		app: govApp,
+		gov: govApp.Governmint.Copy(),
 	}
 }
 
@@ -45,8 +45,8 @@ func (govApp *GovernmintApplication) getGov() *Governmint {
 //--------------------------------------------------------------------------------
 
 type GovernmintAppContext struct {
-	app *GovernmintApplication
-	*Governmint
+	app *GovernmintApplication // for committing state
+	gov *Governmint            // for updating state. synced to app.gov on commit
 }
 
 func (gov *GovernmintAppContext) Echo(message string) string {
@@ -73,9 +73,9 @@ func (gov *GovernmintAppContext) AppendTx(txBytes []byte) ([]types.Event, types.
 	var retCode types.RetCode
 	switch tx_ := tx.Tx.(type) {
 	case ProposalTx:
-		retCode = gov.addProposal(&tx_, tx.Signature)
+		retCode = gov.gov.addProposal(&tx_, tx.Signature)
 	case VoteTx:
-		retCode = gov.addVote(&tx_, tx.Signature)
+		retCode = gov.gov.addVote(&tx_, tx.Signature)
 	default:
 		retCode = types.RetCodeUnknownRequest
 	}
@@ -85,20 +85,17 @@ func (gov *GovernmintAppContext) AppendTx(txBytes []byte) ([]types.Event, types.
 }
 
 func (gov *GovernmintAppContext) GetHash() ([]byte, types.RetCode) {
-	// TODO  ...
-
-	hash := gov.state.Hash()
+	hash := gov.gov.state.Hash()
 	return hash, 0
 }
 
 func (gov *GovernmintAppContext) Commit() types.RetCode {
-	// TODO ...
-	gov.app.commitGov(gov.Governmint)
+	gov.app.commitGov(gov.gov)
 	return 0
 }
 
 func (gov *GovernmintAppContext) Rollback() types.RetCode {
-	gov.Governmint = gov.app.getGov()
+	gov.gov = gov.app.getGov()
 	return 0
 }
 

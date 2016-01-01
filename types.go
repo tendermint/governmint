@@ -66,7 +66,7 @@ type Proposal struct {
 }
 
 func (p *Proposal) ID() string {
-	return string(Hash(p.ProposalTx))
+	return p.ProposalTx.Name
 }
 
 type Vote struct {
@@ -112,6 +112,7 @@ func SignBytes(tx Tx) []byte {
 }
 
 type ProposalTx struct {
+	Name       string `json:"name"`
 	Data       string `json:"data"`
 	GroupID    string `json:"group"`
 	ProposerID string `json:"proposer"`
@@ -124,6 +125,6 @@ type VoteTx struct {
 }
 
 func (tx *VoteTx) String() string {
-	return fmt.Sprintf("%X %v %d", []byte(tx.ProposalID), tx.Vote, tx.Member)
+	return fmt.Sprintf("%X %v %d", tx.ProposalID, tx.Vote, tx.Member)
 
 }

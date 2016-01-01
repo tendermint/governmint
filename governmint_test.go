@@ -50,7 +50,7 @@ func TestVoteTx(t *testing.T) {
 		GroupID:    gov.group.ID(),
 		ProposerID: gov.group.Members[0].EntityID,
 	}
-	propId := string(Hash(propTx))
+	propId := (&Proposal{ProposalTx: propTx}).ID()
 	sig := gov.keys[0].Sign(SignBytes(propTx))
 	if retCode := gov.gov.addProposal(propTx, sig); retCode != 0 {
 		t.Fatal("expected addProposal to pass")

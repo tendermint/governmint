@@ -58,7 +58,7 @@ func newGovernmint() testGovernmint {
 	)
 
 	gov := &Governmint{
-		state,
+		state: state,
 	}
 
 	// add the entities
