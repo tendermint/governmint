@@ -1,24 +1,24 @@
-# governmint
+# GovernMint
 
 TMSP Governance Layer
 
 A simple voting system that enables itself to evolve over time.
 
-- Entities (with a pubkey)
-- Groups (collections of members)
-- Members (an entity associated with a group, with voting power)
-- Proposals of different types with votes
-  * GroupUpdateProposal: a proposal to change the group membership, etc
-  * GroupCreateProposal: a proposal to create a new group
-  * VarSetProposal: a proposal to set a variable value
-  * TextProposal: a human readible proposal
-  * SoftwareUpdateProposal: a proposal to update software
-- Votes (votes on proposals by members)
+- *Entities* with a pubkey
+- *Groups* are collections of members
+- *Members* are entities associated with a group with voting power
+- *Proposals* of different types:
+  * *GroupUpdateProposal*: a proposal to change the group membership, etc
+  * *GroupCreateProposal*: a proposal to create a new group
+  * *VariableSetProposal*: a proposal to set a variable value
+  * *TextProposal*: a human readible proposal
+  * *SoftwareUpgradeProposal*: a proposal to upgrade software
+- *Votes* are on proposals by members
 
 Groups are formed from existing entities and can vote on proposals for that group.
 An entity with voting power is known as a member of that group.
 
 #### Tx types
 
-- ProposeTx (propose something for a group to vote on)
-- CastTx (vote on a proposal)
+- *ProposeTx* to propose something for a group to vote on
+- *CastTx* to vote on a proposal

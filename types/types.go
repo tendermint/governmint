@@ -26,14 +26,6 @@ type Member struct {
 	VotingPower int    `json:"voting_power"`
 }
 
-type Proposal struct {
-	ID         string `json:"id"` // Unique
-	Type       string `json:"type"`
-	Data       string `json:"data"`
-	GroupID    string `json:"group_id"`
-	ProposerID string `json:"proposer_id"`
-}
-
 type Vote struct {
 	Value bool `json:"value"`
 }
@@ -45,6 +37,61 @@ type ActiveProposal struct {
 	votesFor     int
 	votesAgainst int
 }
+
+//----------------------------------------
+
+type Proposal interface {
+	AssertIsProposal()
+}
+
+const (
+	ProposalTypeGroupUpdate            = byte(0x01)
+	ProposalTypeGroupCreate            = byte(0x02)
+	ProposalTypeVariableSet            = byte(0x03)
+	ProposalTypeTextProposal           = byte(0x04)
+	ProposalTypeSoftwareUpdateProposal = byte(0x05)
+)
+
+type GroupUpdateProposal struct {
+	GroupID    string   `json:"group_id"`
+	AddMembers []Member `json:"add_members"`
+	RemMembers []Member `json:"rem_members"`
+}
+
+type GroupCreateProposal struct {
+	GroupID string   `json:"group_id"`
+	Members []Member `json:"members"`
+}
+
+type VariableSetProposal struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type TextProposal struct {
+	Text string `json:"text"`
+}
+
+type SoftwareUpdateProposal struct {
+	Module string `json:"module"`
+	URL    string `json:"url"`
+	Hash   []byte `json:"hash"`
+}
+
+func (_ GroupUpdateProposal) AssertIsProposal()     {}
+func (_ GroupCreateProposal) AssertIsProposal()     {}
+func (_ VariableSetProposal) AssertIsProposal()     {}
+func (_ TextProposal) AssertIsProposal()            {}
+func (_ SoftwareUpgradeProposal) AssertIsProposal() {}
+
+var _ = wire.RegisterInterface(
+	struct{ Proposal }{},
+	wire.ConcreteType{GroupUpdateProposal{}, ProposalTypeGroupUpdate},
+	wire.ConcreteType{GroupCreateProposal{}, ProposalTypeGroupCreate},
+	wire.ConcreteType{VariableSetProposal{}, ProposalTypeVariableSet},
+	wire.ConcreteType{TextProposal{}, ProposalTypeText},
+	wire.ConcreteType{SoftwareUpgradeProposal{}, ProposalTypeSoftwareUpgrade},
+)
 
 //----------------------------------------
 
@@ -82,12 +129,11 @@ func (tx *VoteTx) SignBytes() []byte {
 	return buf.Bytes()
 }
 
-type Tx interface {
-}
+type Tx interface{}
 
 const (
-	txTypeProposal = byte(0x01)
-	txTypeVote     = byte(0x02)
+	TxTypeProposal = byte(0x01)
+	TxTypeVote     = byte(0x02)
 )
 
 var _ = wire.RegisterInterface(
