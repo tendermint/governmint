@@ -8,9 +8,9 @@ import (
 
 	"github.com/codegangsta/cli"
 	. "github.com/tendermint/go-common"
+	rpcclient "github.com/tendermint/go-rpc/client"
 	"github.com/tendermint/go-wire"
 	gov "github.com/tendermint/governmint"
-	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	rpctypes "github.com/tendermint/tendermint/rpc/core/types"
 )
 
@@ -104,7 +104,13 @@ func cmdPropose(c *cli.Context) {
 	if err != nil {
 		Exit(err.Error())
 	}
-	_, err = rpcclient.CallHTTP(TendermintHost, "broadcast_tx", []interface{}{hex.EncodeToString(buf.Bytes())}, &rpctypes.ResultBroadcastTx{})
+	client := rpcclient.NewClientJSONRPC(TendermintHost)
+	_, err = client.Call(
+		"broadcast_tx",
+		[]interface{}{
+			hex.EncodeToString(buf.Bytes())},
+		&rpctypes.ResultBroadcastTx{},
+	)
 	if err != nil {
 		Exit(err.Error())
 	}
@@ -152,7 +158,12 @@ func cmdVote(c *cli.Context) {
 	if err != nil {
 		Exit(err.Error())
 	}
-	_, err = rpcclient.CallHTTP(TendermintHost, "broadcast_tx", []interface{}{hex.EncodeToString(buf.Bytes())}, &rpctypes.ResultBroadcastTx{})
+	client := rpcclient.NewClientJSONRPC(TendermintHost)
+	_, err = client.Call(
+		"broadcast_tx",
+		[]interface{}{hex.EncodeToString(buf.Bytes())},
+		&rpctypes.ResultBroadcastTx{},
+	)
 	if err != nil {
 		Exit(err.Error())
 	}
