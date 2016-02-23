@@ -82,7 +82,7 @@ func (gov *Governmint) setEntity(o *types.Entity) {
 	gov.setObject(types.EntityKey(o.ID), *o)
 }
 
-func (gov *Governmint) getGroup(id string) *types.Group {
+func (gov *Governmint) getGroup(id string) (group *types.Group, ok bool) {
 	obj := gov.getObject(types.GroupKey(id), &types.Group{})
 	if obj == nil {
 		return nil, false
@@ -95,10 +95,13 @@ func (gov *Governmint) setGroup(o *types.Group) {
 	gov.setObject(types.GroupKey(o.ID), *o)
 }
 
-func (gov *Governmint) getActiveProposal(id string) *types.ActiveProposal {
-	var o types.ActiveProposal
-	gov.getObject(types.ActiveProposalKey(id), &o)
-	return &o
+func (gov *Governmint) getActiveProposal(id string) (ap *types.ActiveProposal, ok bool) {
+	obj := gov.getObject(types.ActiveProposalKey(id), &types.ActiveProposal{})
+	if obj == nil {
+		return nil, false
+	} else {
+		return obj.(*types.ActiveProposal), true
+	}
 }
 
 func (gov *Governmint) setActiveProposal(o *types.ActiveProposal) {

@@ -42,7 +42,10 @@ func TestUnit(t *testing.T) {
 		PubKey: pubKey,
 	})
 
-	entityCopy := gov.getEntity("my_entity_id")
+	entityCopy, ok := gov.getEntity("my_entity_id")
+	if !ok {
+		t.Error("Saved(set) entity does not exist")
+	}
 	if entityCopy.ID != "my_entity_id" {
 		t.Error("Got wrong entity id")
 	}
@@ -50,9 +53,8 @@ func TestUnit(t *testing.T) {
 		t.Error("Got wrong entity pubkey")
 	}
 
-	entityBad := gov.getEntity("my_bad_id")
-	if entityBad != nil {
+	entityBad, ok := gov.getEntity("my_bad_id")
+	if ok || entityBad != nil {
 		t.Error("Expected nil entity")
 	}
-	t.Fatal("ok")
 }
