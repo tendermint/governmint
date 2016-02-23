@@ -61,27 +61,22 @@ type Proposal interface {
 }
 
 const (
-	ProposalTypeGroupUpdate     = byte(0x01)
-	ProposalTypeGroupCreate     = byte(0x02)
-	ProposalTypeVariableSet     = byte(0x03)
-	ProposalTypeText            = byte(0x04)
-	ProposalTypeSoftwareUpgrade = byte(0x05)
+	ProposalTypeGroupCreate     = byte(0x01)
+	ProposalTypeGroupUpdate     = byte(0x02)
+	ProposalTypeText            = byte(0x11)
+	ProposalTypeSoftwareUpgrade = byte(0x12)
 )
-
-type GroupUpdateProposal struct {
-	GroupID    string   `json:"group_id"`
-	AddMembers []Member `json:"add_members"`
-	RemMembers []Member `json:"rem_members"`
-}
 
 type GroupCreateProposal struct {
 	GroupID string   `json:"group_id"`
 	Members []Member `json:"members"`
 }
 
-type VariableSetProposal struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+type GroupUpdateProposal struct {
+	GroupID      string   `json:"group_id"`
+	GroupVersion int      `json:"group_version"`
+	AddMembers   []Member `json:"add_members"`
+	RemMembers   []Member `json:"rem_members"`
 }
 
 type TextProposal struct {
@@ -94,19 +89,17 @@ type SoftwareUpgradeProposal struct {
 	Hash   []byte `json:"hash"`
 }
 
-func (_ GroupUpdateProposal) AssertIsProposal()     {}
-func (_ GroupCreateProposal) AssertIsProposal()     {}
-func (_ VariableSetProposal) AssertIsProposal()     {}
-func (_ TextProposal) AssertIsProposal()            {}
-func (_ SoftwareUpgradeProposal) AssertIsProposal() {}
+func (_ *GroupCreateProposal) AssertIsProposal()     {}
+func (_ *GroupUpdateProposal) AssertIsProposal()     {}
+func (_ *TextProposal) AssertIsProposal()            {}
+func (_ *SoftwareUpgradeProposal) AssertIsProposal() {}
 
 var _ = wire.RegisterInterface(
 	struct{ Proposal }{},
-	wire.ConcreteType{GroupUpdateProposal{}, ProposalTypeGroupUpdate},
-	wire.ConcreteType{GroupCreateProposal{}, ProposalTypeGroupCreate},
-	wire.ConcreteType{VariableSetProposal{}, ProposalTypeVariableSet},
-	wire.ConcreteType{TextProposal{}, ProposalTypeText},
-	wire.ConcreteType{SoftwareUpgradeProposal{}, ProposalTypeSoftwareUpgrade},
+	wire.ConcreteType{&GroupCreateProposal{}, ProposalTypeGroupCreate},
+	wire.ConcreteType{&GroupUpdateProposal{}, ProposalTypeGroupUpdate},
+	wire.ConcreteType{&TextProposal{}, ProposalTypeText},
+	wire.ConcreteType{&SoftwareUpgradeProposal{}, ProposalTypeSoftwareUpgrade},
 )
 
 func ProposalID(proposal Proposal) string {

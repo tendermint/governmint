@@ -95,4 +95,59 @@ func TestUnit(t *testing.T) {
 			t.Error("Expected nil group")
 		}
 	}
+
+	// Test ActiveProposal
+	{
+		ap := &types.ActiveProposal{
+			Proposal: &types.GroupUpdateProposal{
+				GroupID:      "my_group_id",
+				GroupVersion: 1,
+				AddMembers: []types.Member{
+					types.Member{
+						EntityID:    "entity1",
+						VotingPower: 1,
+					},
+				},
+				RemMembers: []types.Member{
+					types.Member{
+						EntityID:    "entity2",
+						VotingPower: 1,
+					},
+				},
+			},
+			Votes: []*types.Vote{
+				&types.Vote{
+					Value:     "my_vote",
+					Signature: nil, // TODO set a sig
+				},
+			},
+		}
+		gov.setActiveProposal(ap)
+		proposalID := types.ProposalID(ap.Proposal)
+
+		apCopy, ok := gov.getActiveProposal(proposalID)
+		if !ok {
+			t.Error("Saved(set) ap does not exist")
+		}
+		if apCopy.Proposal.(*types.GroupUpdateProposal).GroupID != "my_group_id" {
+			t.Error("Got wrong ap proposal group id")
+		}
+		if apCopy.Proposal.(*types.GroupUpdateProposal).GroupVersion != 1 {
+			t.Error("Got wrong ap proposal group version ")
+		}
+		if len(apCopy.Proposal.(*types.GroupUpdateProposal).AddMembers) != 1 {
+			t.Error("Got wrong ap proposal add members size")
+		}
+		if len(apCopy.Proposal.(*types.GroupUpdateProposal).RemMembers) != 1 {
+			t.Error("Got wrong ap proposal add members size")
+		}
+		if len(apCopy.Votes) != 1 {
+			t.Error("Got wrong ap proposal votes size")
+		}
+
+		apBad, ok := gov.getActiveProposal("my_bad_id")
+		if ok || apBad != nil {
+			t.Error("Expected nil ap")
+		}
+	}
 }

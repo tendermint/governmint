@@ -105,5 +105,5 @@ func (gov *Governmint) getActiveProposal(id string) (ap *types.ActiveProposal, o
 }
 
 func (gov *Governmint) setActiveProposal(o *types.ActiveProposal) {
-	gov.setObject(types.ActiveProposalKey(types.ProposalID(o)), *o)
+	gov.setObject(types.ActiveProposalKey(types.ProposalID(o.Proposal)), *o)
 }
