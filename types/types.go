@@ -1,12 +1,8 @@
 package types
 
 import (
-	"bytes"
-	"fmt"
-	"time"
-
+	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
-	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
 )
 
@@ -27,15 +23,27 @@ type Member struct {
 }
 
 type Vote struct {
-	Value bool `json:"value"`
+	Value bool   `json:"value"`
+	Text  string `json:"text"`
 }
 
 type ActiveProposal struct {
 	Proposal
 	Votes []*Vote // same order as Group.Members
+}
 
-	votesFor     int
-	votesAgainst int
+//----------------------------------------
+
+func EntityKey(entityID string) []byte {
+	return []byte("G:e:" + entityID)
+}
+
+func GroupKey(groupID string) []byte {
+	return []byte("G:g:" + groupID)
+}
+
+func ActiveProposalKey(proposalID string) []byte {
+	return []byte("G:ap:" + proposalID)
 }
 
 //----------------------------------------
@@ -45,11 +53,11 @@ type Proposal interface {
 }
 
 const (
-	ProposalTypeGroupUpdate            = byte(0x01)
-	ProposalTypeGroupCreate            = byte(0x02)
-	ProposalTypeVariableSet            = byte(0x03)
-	ProposalTypeTextProposal           = byte(0x04)
-	ProposalTypeSoftwareUpdateProposal = byte(0x05)
+	ProposalTypeGroupUpdate     = byte(0x01)
+	ProposalTypeGroupCreate     = byte(0x02)
+	ProposalTypeVariableSet     = byte(0x03)
+	ProposalTypeText            = byte(0x04)
+	ProposalTypeSoftwareUpgrade = byte(0x05)
 )
 
 type GroupUpdateProposal struct {
@@ -72,7 +80,7 @@ type TextProposal struct {
 	Text string `json:"text"`
 }
 
-type SoftwareUpdateProposal struct {
+type SoftwareUpgradeProposal struct {
 	Module string `json:"module"`
 	URL    string `json:"url"`
 	Hash   []byte `json:"hash"`
@@ -93,22 +101,24 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{SoftwareUpgradeProposal{}, ProposalTypeSoftwareUpgrade},
 )
 
+func ProposalID(proposal Proposal) string {
+	return Fmt("%X", wire.BinaryRipemd160(struct{ Proposal }{proposal}))
+}
+
 //----------------------------------------
 
 type ProposalTx struct {
-	Proposal  `json:"proposal"`
+	EntityID  string           `json:"entity_id"`
+	Proposal  Proposal         `json:"proposal"`
 	Signature crypto.Signature `json:"signature,omitempty"`
 }
 
 func (tx *ProposalTx) SignBytes() []byte {
-	buf := new(bytes.Buffer)
-	var err error
-	var n int
 	sig := tx.Signature
 	tx.Signature = nil
-	wire.WriteJSON(tx, buf, &n, &err)
+	jsonBytes := wire.JSONBytes(tx)
 	tx.Signature = sig
-	return buf.Bytes()
+	return jsonBytes
 }
 
 type VoteTx struct {
@@ -119,17 +129,16 @@ type VoteTx struct {
 }
 
 func (tx *VoteTx) SignBytes() []byte {
-	buf := new(bytes.Buffer)
-	var err error
-	var n int
 	sig := tx.Signature
 	tx.Signature = nil
-	wire.WriteJSON(tx, buf, &n, &err)
+	jsonBytes := wire.JSONBytes(tx)
 	tx.Signature = sig
-	return buf.Bytes()
+	return jsonBytes
 }
 
-type Tx interface{}
+type Tx interface {
+	SignBytes() []byte
+}
 
 const (
 	TxTypeProposal = byte(0x01)
@@ -138,6 +147,6 @@ const (
 
 var _ = wire.RegisterInterface(
 	struct{ Tx }{},
-	wire.ConcreteType{ProposalTx{}, txTypeProposal},
-	wire.ConcreteType{VoteTx{}, txTypeVote},
+	wire.ConcreteType{ProposalTx{}, TxTypeProposal},
+	wire.ConcreteType{VoteTx{}, TxTypeVote},
 )

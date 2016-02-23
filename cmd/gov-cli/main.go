@@ -10,7 +10,7 @@ import (
 	. "github.com/tendermint/go-common"
 	rpcclient "github.com/tendermint/go-rpc/client"
 	"github.com/tendermint/go-wire"
-	gov "github.com/tendermint/governmint"
+	types "github.com/tendermint/governmint/types"
 	rpctypes "github.com/tendermint/tendermint/rpc/core/types"
 )
 
@@ -19,7 +19,7 @@ var (
 
 	groupFlag = cli.StringFlag{
 		Name:  "group",
-		Value: "Guvnahs",
+		Value: "validators",
 		Usage: "Group name",
 	}
 
@@ -86,7 +86,7 @@ func cmdPropose(c *cli.Context) {
 
 	name, data := args[0], args[1]
 
-	pTx := gov.ProposalTx{
+	pTx := types.ProposalTx{
 		Name:       name,
 		Data:       data,
 		GroupID:    c.String("group"),
@@ -97,7 +97,7 @@ func cmdPropose(c *cli.Context) {
 	if err != nil {
 		Exit(err.Error())
 	}
-	tx := &gov.SignedTx{pTx, sig}
+	tx := &types.SignedTx{pTx, sig}
 	buf := new(bytes.Buffer)
 	var n int
 	wire.WriteJSON(tx, buf, &n, &err)
@@ -114,7 +114,7 @@ func cmdPropose(c *cli.Context) {
 	if err != nil {
 		Exit(err.Error())
 	}
-	log.Notice("Broadcast proposal", "id", []byte((&gov.Proposal{ProposalTx: &pTx}).ID()), "sig", sig)
+	log.Notice("Broadcast proposal", "id", []byte((&types.Proposal{ProposalTx: &pTx}).ID()), "sig", sig)
 }
 
 func cmdVote(c *cli.Context) {
@@ -141,7 +141,7 @@ func cmdVote(c *cli.Context) {
 
 	}
 
-	vTx := gov.VoteTx{
+	vTx := types.VoteTx{
 		ProposalID: proposal,
 		Member:     member,
 		Vote:       vote,
@@ -151,7 +151,7 @@ func cmdVote(c *cli.Context) {
 	if err != nil {
 		Exit(err.Error())
 	}
-	tx := &gov.SignedTx{vTx, sig}
+	tx := &types.SignedTx{vTx, sig}
 	buf := new(bytes.Buffer)
 	var n int
 	wire.WriteJSON(tx, buf, &n, &err)

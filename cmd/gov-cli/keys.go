@@ -11,12 +11,12 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	gov "github.com/tendermint/governmint"
+	"github.com/tendermint/governmint/types"
 )
 
 var KeyHost = "http://localhost:4767"
 
-func SignTx(tx gov.Tx, keyName string) (crypto.Signature, error) {
+func SignTx(tx types.Tx, keyName string) (crypto.Signature, error) {
 	buf := new(bytes.Buffer)
 	var n int
 	var err error
