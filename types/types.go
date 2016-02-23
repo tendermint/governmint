@@ -22,9 +22,17 @@ type Member struct {
 	VotingPower int    `json:"voting_power"`
 }
 
+func NewMember(entityID string, votingPower int) *Member {
+	return &Member{entityID, votingPower}
+}
+
 type Vote struct {
-	Value bool   `json:"value"`
-	Text  string `json:"text"`
+	Value     string           `json:"value"`
+	Signature crypto.Signature `json:"signature"`
+}
+
+func NewVote(value string, sig crypto.Signature) *Vote {
+	return &Vote{value, sig}
 }
 
 type ActiveProposal struct {
@@ -124,7 +132,7 @@ func (tx *ProposalTx) SignBytes() []byte {
 type VoteTx struct {
 	EntityID   string           `json:"entity_id"`
 	ProposalID string           `json:"proposal_id"`
-	Vote       Vote             `json:"vote"`
+	Value      string           `json:"value"`
 	Signature  crypto.Signature `json:"signature,omitempty"`
 }
 
