@@ -6,6 +6,10 @@ import (
 	"github.com/tendermint/go-wire"
 )
 
+const (
+	AdminGroupID = "admin"
+)
+
 type Entity struct {
 	ID     string        `json:"id"` // Unique
 	PubKey crypto.PubKey `json:"pub_key"`
@@ -19,25 +23,30 @@ type Group struct {
 
 type Member struct {
 	EntityID    string `json:"entity_id"`
-	VotingPower int    `json:"voting_power"`
+	VotingPower uint64 `json:"voting_power"`
 }
 
 func NewMember(entityID string, votingPower int) *Member {
 	return &Member{entityID, votingPower}
 }
 
-type Vote struct {
+type SignedVote struct {
 	Value     string           `json:"value"`
 	Signature crypto.Signature `json:"signature"`
 }
 
-func NewVote(value string, sig crypto.Signature) *Vote {
-	return &Vote{value, sig}
+func NewSignedVote(value string, sig crypto.Signature) *SignedVote {
+	return &SignedVote{value, sig}
 }
 
 type ActiveProposal struct {
 	Proposal
-	Votes []*Vote // same order as Group.Members
+	SignedVotes []*SignedVote // same order as Group.Members
+}
+
+type Vote struct {
+	ProposalID string `json:"proposal_id"`
+	Value      string `json:"value"`
 }
 
 //----------------------------------------
@@ -56,85 +65,110 @@ func ActiveProposalKey(proposalID string) []byte {
 
 //----------------------------------------
 
-type Proposal interface {
-	AssertIsProposal()
-}
-
-const (
-	ProposalTypeGroupCreate     = byte(0x01)
-	ProposalTypeGroupUpdate     = byte(0x02)
-	ProposalTypeText            = byte(0x11)
-	ProposalTypeSoftwareUpgrade = byte(0x12)
-)
-
 type GroupCreateProposal struct {
 	GroupID string   `json:"group_id"`
 	Members []Member `json:"members"`
 }
 
+func (p GroupCreateProposal) GetGroupID() string { return p.GroupID }
+
 type GroupUpdateProposal struct {
-	GroupID      string   `json:"group_id"`
-	GroupVersion int      `json:"group_version"`
-	AddMembers   []Member `json:"add_members"`
-	RemMembers   []Member `json:"rem_members"`
+	GroupID        string   `json:"group_id"`
+	GroupVersion   int      `json:"group_version"`
+	ChangedMembers []Member `json:"changed_members"` // 0 VotingPower to remove
 }
+
+func (p GroupUpdateProposal) GetGroupID() string { return p.GroupID }
 
 type TextProposal struct {
-	Text string `json:"text"`
+	GroupID string `json:"group_id"`
+	Text    string `json:"text"`
 }
 
-type SoftwareUpgradeProposal struct {
-	Module string `json:"module"`
-	URL    string `json:"url"`
-	Hash   []byte `json:"hash"`
+func (p TextProposal) GetGroupID() string { return p.GroupID }
+
+type UpgradeProposalModule struct {
+	Name   string `json:"module"`
+	Script string `json:"script"`
 }
 
-func (_ *GroupCreateProposal) AssertIsProposal()     {}
-func (_ *GroupUpdateProposal) AssertIsProposal()     {}
-func (_ *TextProposal) AssertIsProposal()            {}
-func (_ *SoftwareUpgradeProposal) AssertIsProposal() {}
+type UpgradeProposal struct {
+	Modules []UpgradeProposalModule
+}
+
+func (p UpgradeProposal) GetGroupID() string { return AdminGroupID }
+
+func ProposalID(proposal Proposal) string {
+	return Fmt("%X", wire.BinaryRipemd160(struct{ Proposal }{proposal}))
+}
+
+type ProposalWithID struct {
+	Proposal Proposal `json:"unwrap"`
+	id       string   `json:"-"`
+}
+
+func (p *ProposalWithID) ID() string {
+	if p.id == "" {
+		p.id = ProposalID(p.Proposal)
+	}
+	return p.id
+}
+
+type Proposal interface {
+	AssertIsProposal()
+	GetGroupID() string
+}
+
+const (
+	ProposalTypeGroupCreate = byte(0x01)
+	ProposalTypeGroupUpdate = byte(0x02)
+	ProposalTypeText        = byte(0x11)
+	ProposalTypeUpgrade     = byte(0x12)
+)
+
+func (_ *GroupCreateProposal) AssertIsProposal() {}
+func (_ *GroupUpdateProposal) AssertIsProposal() {}
+func (_ *TextProposal) AssertIsProposal()        {}
+func (_ *UpgradeProposal) AssertIsProposal()     {}
 
 var _ = wire.RegisterInterface(
 	struct{ Proposal }{},
 	wire.ConcreteType{&GroupCreateProposal{}, ProposalTypeGroupCreate},
 	wire.ConcreteType{&GroupUpdateProposal{}, ProposalTypeGroupUpdate},
 	wire.ConcreteType{&TextProposal{}, ProposalTypeText},
-	wire.ConcreteType{&SoftwareUpgradeProposal{}, ProposalTypeSoftwareUpgrade},
+	wire.ConcreteType{&UpgradeProposal{}, ProposalTypeUpgrade},
 )
-
-func ProposalID(proposal Proposal) string {
-	return Fmt("%X", wire.BinaryRipemd160(struct{ Proposal }{proposal}))
-}
 
 //----------------------------------------
 
-type ProposalTx struct {
-	EntityID  string           `json:"entity_id"`
-	Proposal  Proposal         `json:"proposal"`
-	Signature crypto.Signature `json:"signature,omitempty"`
+// A simple tx to be signed by a single entity
+type SimpleTx interface {
+	EntityID() string
+	Signature() crypto.Signature
 }
 
+type ProposalTx struct {
+	EntityID  string           `json:"entity_id"`
+	Proposal  ProposalWithID   `json:"proposal"`
+	Signature crypto.Signature `json:"signature"`
+}
+
+func (tx *ProposalTx) EntityID() string            { return tx.EntityID }
+func (tx *ProposalTx) Signature() crypto.Signature { return tx.Signature }
 func (tx *ProposalTx) SignBytes() []byte {
-	sig := tx.Signature
-	tx.Signature = nil
-	jsonBytes := wire.JSONBytes(tx)
-	tx.Signature = sig
-	return jsonBytes
+	return wire.JSONBytes(tx.Proposal)
 }
 
 type VoteTx struct {
-	EntityID   string           `json:"entity_id"`
-	ProposalID string           `json:"proposal_id"`
-	Value      string           `json:"value"`
-	Signature  crypto.Signature `json:"signature,omitempty"`
+	EntityID  string           `json:"entity_id"`
+	Vote      Vote             `json:"vote"`
+	Signature crypto.Signature `json:"signature"`
 }
 
+func (tx *VoteTx) EntityID() string            { return tx.EntityID }
+func (tx *VoteTx) Signature() crypto.Signature { return tx.Signature }
 func (tx *VoteTx) SignBytes() []byte {
-	sig := tx.Signature
-	tx.Signature = nil
-	jsonBytes := wire.JSONBytes(tx)
-	tx.Signature = sig
-	return jsonBytes
+	return wire.JSONBytes(tx.Vote)
 }
 
 type Tx interface {
@@ -151,3 +185,14 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{ProposalTx{}, TxTypeProposal},
 	wire.ConcreteType{VoteTx{}, TxTypeVote},
 )
+
+//----------------------------------------
+
+type TMSPError struct {
+	Code tmsp.CodeType
+	Log  string
+}
+
+func (tmspErr TMSPError) IsOK() bool {
+	return tmspErr.Code == tmsp.CodeType_OK
+}
