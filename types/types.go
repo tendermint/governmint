@@ -7,16 +7,17 @@ import (
 )
 
 const (
-	AdminGroupID = "admin"
+	AdminGroupID      = "admin"
+	ValidatorsGroupID = "validators"
 )
 
 type Entity struct {
-	ID     string        `json:"id"` // Unique
+	ID     string        `json:"id"`
 	PubKey crypto.PubKey `json:"pub_key"`
 }
 
 type Group struct {
-	ID      string   `json:"id"` // Unique
+	ID      string   `json:"id"`
 	Version int      `json:"version"`
 	Members []Member `json:"members"`
 }
@@ -26,117 +27,121 @@ type Member struct {
 	VotingPower uint64 `json:"voting_power"`
 }
 
-func NewMember(entityID string, votingPower int) *Member {
-	return &Member{entityID, votingPower}
-}
-
-type SignedVote struct {
-	Value     string           `json:"value"`
-	Signature crypto.Signature `json:"signature"`
-}
-
-func NewSignedVote(value string, sig crypto.Signature) *SignedVote {
-	return &SignedVote{value, sig}
-}
-
-type ActiveProposal struct {
-	Proposal
-	SignedVotes []*SignedVote // same order as Group.Members
+func NewMember(entityID string, votingPower int) Member {
+	return Member{entityID, votingPower}
 }
 
 type Vote struct {
+	Height     uint64 `json:"height"`
+	EntityID   string `json:"entity_id"`
 	ProposalID string `json:"proposal_id"`
 	Value      string `json:"value"`
+}
+
+type SignedVote struct {
+	Vote      Vote             `json:"vote"`
+	Signature crypto.Signature `json:"signature"`
+}
+
+func NewSignedVote(vote Vote, sig crypto.Signature) SignedVote {
+	return SignedVote{vote, sig}
+}
+
+type Proposal struct {
+	ID          string       `json:"id"`
+	Info        ProposalInfo `json:"info"`
+	StartHeight uint64       `json:"start_height"`
+	EndHeight   uint64       `json:"end_height"`
+}
+
+type ActiveProposal struct {
+	Proposal    Proposal     `json:"proposal"`
+	SignedVotes []SignedVote `json:"signed_votes"`
+}
+
+//----------------------------------------
+
+type GovMeta struct {
+	Height       uint64 // The current block height
+	NumEntities  int    // For EntityID generation
+	NumGroups    int    // For GroupID generation
+	NumProposals int    // For ProposalID generation
 }
 
 //----------------------------------------
 
 func EntityKey(entityID string) []byte {
-	return []byte("G:e:" + entityID)
+	return []byte("GOV:e:" + entityID)
 }
 
 func GroupKey(groupID string) []byte {
-	return []byte("G:g:" + groupID)
+	return []byte("GOV:g:" + groupID)
 }
 
 func ActiveProposalKey(proposalID string) []byte {
-	return []byte("G:ap:" + proposalID)
+	return []byte("GOV:ap:" + proposalID)
 }
+
+const GovMetaKey = "GOV:meta"
 
 //----------------------------------------
 
-type GroupCreateProposal struct {
+type GroupCreateProposalInfo struct {
 	GroupID string   `json:"group_id"`
 	Members []Member `json:"members"`
 }
 
-func (p GroupCreateProposal) GetGroupID() string { return p.GroupID }
+func (p GroupCreateProposalInfo) GetGroupID() string { return p.GroupID }
 
-type GroupUpdateProposal struct {
+type GroupUpdateProposalInfo struct {
 	GroupID        string   `json:"group_id"`
 	GroupVersion   int      `json:"group_version"`
 	ChangedMembers []Member `json:"changed_members"` // 0 VotingPower to remove
 }
 
-func (p GroupUpdateProposal) GetGroupID() string { return p.GroupID }
+func (p GroupUpdateProposalInfo) GetGroupID() string { return p.GroupID }
 
-type TextProposal struct {
+type TextProposalInfo struct {
 	GroupID string `json:"group_id"`
 	Text    string `json:"text"`
 }
 
-func (p TextProposal) GetGroupID() string { return p.GroupID }
+func (p TextProposalInfo) GetGroupID() string { return p.GroupID }
 
-type UpgradeProposalModule struct {
+type UpgradeProposalInfoModule struct {
 	Name   string `json:"module"`
 	Script string `json:"script"`
 }
 
-type UpgradeProposal struct {
-	Modules []UpgradeProposalModule
+type UpgradeProposalInfo struct {
+	Modules []UpgradeProposalInfoModule
 }
 
-func (p UpgradeProposal) GetGroupID() string { return AdminGroupID }
+func (p UpgradeProposalInfo) GetGroupID() string { return AdminGroupID }
 
-func ProposalID(proposal Proposal) string {
-	return Fmt("%X", wire.BinaryRipemd160(struct{ Proposal }{proposal}))
-}
-
-type ProposalWithID struct {
-	Proposal Proposal `json:"unwrap"`
-	id       string   `json:"-"`
-}
-
-func (p *ProposalWithID) ID() string {
-	if p.id == "" {
-		p.id = ProposalID(p.Proposal)
-	}
-	return p.id
-}
-
-type Proposal interface {
-	AssertIsProposal()
+type ProposalInfo interface {
+	AssertIsProposalInfo()
 	GetGroupID() string
 }
 
 const (
-	ProposalTypeGroupCreate = byte(0x01)
-	ProposalTypeGroupUpdate = byte(0x02)
-	ProposalTypeText        = byte(0x11)
-	ProposalTypeUpgrade     = byte(0x12)
+	ProposalInfoTypeGroupCreate = byte(0x01)
+	ProposalInfoTypeGroupUpdate = byte(0x02)
+	ProposalInfoTypeText        = byte(0x11)
+	ProposalInfoTypeUpgrade     = byte(0x12)
 )
 
-func (_ *GroupCreateProposal) AssertIsProposal() {}
-func (_ *GroupUpdateProposal) AssertIsProposal() {}
-func (_ *TextProposal) AssertIsProposal()        {}
-func (_ *UpgradeProposal) AssertIsProposal()     {}
+func (_ *GroupCreateProposalInfo) AssertIsProposalInfo() {}
+func (_ *GroupUpdateProposalInfo) AssertIsProposalInfo() {}
+func (_ *TextProposalInfo) AssertIsProposalInfo()        {}
+func (_ *UpgradeProposalInfo) AssertIsProposalInfo()     {}
 
 var _ = wire.RegisterInterface(
-	struct{ Proposal }{},
-	wire.ConcreteType{&GroupCreateProposal{}, ProposalTypeGroupCreate},
-	wire.ConcreteType{&GroupUpdateProposal{}, ProposalTypeGroupUpdate},
-	wire.ConcreteType{&TextProposal{}, ProposalTypeText},
-	wire.ConcreteType{&UpgradeProposal{}, ProposalTypeUpgrade},
+	struct{ ProposalInfo }{},
+	wire.ConcreteType{&GroupCreateProposalInfo{}, ProposalInfoTypeGroupCreate},
+	wire.ConcreteType{&GroupUpdateProposalInfo{}, ProposalInfoTypeGroupUpdate},
+	wire.ConcreteType{&TextProposalInfo{}, ProposalInfoTypeText},
+	wire.ConcreteType{&UpgradeProposalInfo{}, ProposalInfoTypeUpgrade},
 )
 
 //----------------------------------------
@@ -149,7 +154,7 @@ type SimpleTx interface {
 
 type ProposalTx struct {
 	EntityID  string           `json:"entity_id"`
-	Proposal  ProposalWithID   `json:"proposal"`
+	Proposal  Proposal         `json:"proposal"`
 	Signature crypto.Signature `json:"signature"`
 }
 
@@ -160,12 +165,11 @@ func (tx *ProposalTx) SignBytes() []byte {
 }
 
 type VoteTx struct {
-	EntityID  string           `json:"entity_id"`
 	Vote      Vote             `json:"vote"`
 	Signature crypto.Signature `json:"signature"`
 }
 
-func (tx *VoteTx) EntityID() string            { return tx.EntityID }
+func (tx *VoteTx) EntityID() string            { return tx.Vote.EntityID }
 func (tx *VoteTx) Signature() crypto.Signature { return tx.Signature }
 func (tx *VoteTx) SignBytes() []byte {
 	return wire.JSONBytes(tx.Vote)

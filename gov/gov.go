@@ -13,11 +13,24 @@ const (
 )
 
 type Governmint struct {
+	*GovMeta
 	eyesCli *eyes.Client
 }
 
 func NewGovernmint(eyesCli *eyes.Client) *Governmint {
-	return &Governmint{eyesCli}
+	gov := &Governmint{
+		GovMeta: &GovMeta{
+			Height:       0,
+			NumEntities:  0,
+			NumGroups:    0,
+			NumProposals: 0,
+		},
+		eyesCli: eyesCli,
+	}
+	if meta, ok := gov.GetGovMeta(); ok {
+		gov.GovMeta = meta
+	}
+	return
 }
 
 // TMSP::Info
@@ -62,6 +75,8 @@ func (gov *Governmint) AppendTxParsed(tx types.Tx) (code tmsp.CodeType, result [
 		if !tmspErr.IsOK() {
 			return tmspErr.Code, nil, tmspErr.Log
 		}
+		// Good! Run the proposal tx
+		// XXX
 	case *types.VoteTx:
 		// Ensure that voter exists
 		entity, ok := gov.GetEntity(tx.EntityID())
@@ -72,15 +87,37 @@ func (gov *Governmint) AppendTxParsed(tx types.Tx) (code tmsp.CodeType, result [
 		if ap, ok := gov.GetActiveProposal(v.Vote.ProposalID); !ok {
 			return tmsp.CodeType_GovUnknownProposal, nil, Fmt("Unknown proposal %v", v.Vote.ProposalID)
 		}
-		// Ensure that the
-
+		// Ensure that the vote's height is <= current height
+		if !(vote.Height <= app.GovMeta.Height) {
+			return tmsp.CodeType_GovInvalidVote, nil, Fmt("Vote height is invalid")
+		}
+		// Ensure that the vote's height matches the proposal's range
+		if !(ap.Proposal.StartHeight <= vote.Height <= ap.Proposal.EndHeight) {
+			return tmsp.CodeType_GovInvalidVote, nil, Fmt("Vote height is invalid")
+		}
+		// Ensure that the group exists, if specified
+		var group *types.Group
+		groupID = tx.Proposal.GetGroupID()
+		if groupID != "" {
+			ok := false
+			group, ok := gov.GetGroup(groupID)
+			if !ok {
+				return tmsp.CodeType_GovUnknownGroup, nil, Fmt("Group %v unknown", groupID)
+			}
+		}
+		// Ensure that the voter belongs to the group
+		if !isMemberOf(group, entity.ID) {
+			return tmsp.CodeType_GovInvalidMember, nil, Fmt("Voter %v not a member of %v", entity.ID, groupID)
+		}
+		// Ensure that the voter hasn't already voted
+		if exists, _ := hasVoted(ap, entity.ID); exists {
+			return tmsp.CodeType_GovDuplicateVote, nil, Fmt("Voter %v already voted", entity.ID)
+		}
+		// Good! Run the vote tx
+		// XXX
+	default:
+		return tmsp.CodeType_GovUnknownTx
 	}
-	// Get entity
-
-	// Verify signature
-	//signBytes := tx.SignBytes()
-
-	return // XXX
 }
 
 // TMSP::CheckTx
@@ -93,92 +130,29 @@ func (gov *Governmint) Query(query []byte) (code tmsp.CodeType, result []byte, l
 	return // XXX
 }
 
-// TMSP::InitValidators
-func (app *Governmint) InitValidators(validators []*tmsp.Validator) {
+// TMSP::InitChain
+func (app *Governmint) InitChain(validators []*tmsp.Validator) {
+	// Construct a group of entities for the validators.
+
 }
 
-// TMSP::SyncValidators
-func (app *Governmint) SyncValidators() []*tmsp.Validator {
-}
-
-//----------------------------------------
-
-// Get some object, or panic.
-// objPtr: pointer to the object to populate, if value exists for key
-// Use the return value, so nil can be returned for keys with no value.
-func (gov *Governmint) getObject(key []byte, objPtr interface{}) interface{} {
-	objBytes, err := gov.eyesCli.GetSync(key)
-	if err != nil {
-		panic("Error getting obj: " + err.Error())
-	}
-	if len(objBytes) == 0 {
-		return nil // NOTE must use return value
-	}
-	err = wire.ReadBinaryBytes(objBytes, objPtr)
-	if err != nil {
-		panic("Error parsing obj: " + err.Error())
-	}
-	return objPtr
-}
-
-// Set some object, or panic
-// If obj is a concrete type of an interface,
-// remember to wrap in struct{MyInterface}{obj}.
-func (gov *Governmint) setObject(key []byte, obj interface{}) {
-	objBytes := wire.BinaryBytes(obj)
-	err := gov.eyesCli.SetSync(key, objBytes)
-	if err != nil {
-		panic("Error setting obj: " + err.Error())
-	}
-}
-
-func (gov *Governmint) GetEntity(id string) (entity *types.Entity, ok bool) {
-	obj := gov.getObject(types.EntityKey(id), &types.Entity{})
-	if obj == nil {
-		return nil, false
-	} else {
-		return obj.(*types.Entity), true
-	}
-}
-
-func (gov *Governmint) SetEntity(o *types.Entity) {
-	gov.setObject(types.EntityKey(o.ID), *o)
-}
-
-func (gov *Governmint) GetGroup(id string) (group *types.Group, ok bool) {
-	obj := gov.getObject(types.GroupKey(id), &types.Group{})
-	if obj == nil {
-		return nil, false
-	} else {
-		return obj.(*types.Group), true
-	}
-}
-
-func (gov *Governmint) SetGroup(o *types.Group) {
-	gov.setObject(types.GroupKey(o.ID), *o)
-}
-
-func (gov *Governmint) GetActiveProposal(id string) (ap *types.ActiveProposal, ok bool) {
-	obj := gov.getObject(types.ActiveProposalKey(id), &types.ActiveProposal{})
-	if obj == nil {
-		return nil, false
-	} else {
-		return obj.(*types.ActiveProposal), true
-	}
-}
-
-func (gov *Governmint) SetActiveProposal(o *types.ActiveProposal) {
-	gov.setObject(types.ActiveProposalKey(types.ProposalID(o.Proposal)), *o)
+// TMSP::EndBlock
+func (app *Governmint) EndBlock(height uint64) (changedValidators []*tmsp.Validator) {
+	app.GovMeta.Height = height + 1
+	// Persist GovMeta
+	app.SetGovMeta(app.GovMeta)
+	return
 }
 
 //----------------------------------------
 
-func (gov *Governmint) validateProposal(p types.ProposalWithID) (err types.TMSPError) {
+func (gov *Governmint) validateProposal(p types.Proposal) (err types.TMSPError) {
 	// Ensure that the proposal is unique
-	if _, exists := gov.GetActiveProposal(p.ID()); exists {
+	if _, exists := gov.GetActiveProposal(p.ID); exists {
 		return types.TMSPError{tmsp.CodeType_GovDuplicateProposal,
-			Fmt("Proposal with id %v already exists", p.ID())}
+			Fmt("Proposal with id %v already exists", p.ID)}
 	}
+	// Ensure that the
 	switch p := p.(type) {
 	case *types.GroupCreateProposal:
 		// Ensure that the group does not exist
@@ -300,4 +274,96 @@ func isMemberOf(group *types.Group, entityID string) bool {
 		}
 	}
 	return false
+}
+
+func hasVoted(ap *types.ActiveProposal, entityID string) (bool, int) {
+	for i, sVote := range ap.SignedVotes {
+		if sVote.Vote.EntityID == entityID {
+			return true, i
+		}
+	}
+	return false, -1
+}
+
+//----------------------------------------
+
+// Get some object, or panic.
+// objPtr: pointer to the object to populate, if value exists for key
+// Use the return value, so nil can be returned for keys with no value.
+func (gov *Governmint) getObject(key []byte, objPtr interface{}) interface{} {
+	objBytes, err := gov.eyesCli.GetSync(key)
+	if err != nil {
+		panic("Error getting obj: " + err.Error())
+	}
+	if len(objBytes) == 0 {
+		return nil // NOTE must use return value
+	}
+	err = wire.ReadBinaryBytes(objBytes, objPtr)
+	if err != nil {
+		panic("Error parsing obj: " + err.Error())
+	}
+	return objPtr
+}
+
+// Set some object, or panic
+// If obj is a concrete type of an interface,
+// remember to wrap in struct{MyInterface}{obj}.
+func (gov *Governmint) setObject(key []byte, obj interface{}) {
+	objBytes := wire.BinaryBytes(obj)
+	err := gov.eyesCli.SetSync(key, objBytes)
+	if err != nil {
+		panic("Error setting obj: " + err.Error())
+	}
+}
+
+func (gov *Governmint) GetEntity(id string) (entity *types.Entity, ok bool) {
+	obj := gov.getObject(types.EntityKey(id), &types.Entity{})
+	if obj == nil {
+		return nil, false
+	} else {
+		return obj.(*types.Entity), true
+	}
+}
+
+func (gov *Governmint) SetEntity(o *types.Entity) {
+	gov.setObject(types.EntityKey(o.ID), *o)
+}
+
+func (gov *Governmint) GetGroup(id string) (group *types.Group, ok bool) {
+	obj := gov.getObject(types.GroupKey(id), &types.Group{})
+	if obj == nil {
+		return nil, false
+	} else {
+		return obj.(*types.Group), true
+	}
+}
+
+func (gov *Governmint) SetGroup(o *types.Group) {
+	gov.setObject(types.GroupKey(o.ID), *o)
+}
+
+func (gov *Governmint) GetActiveProposal(id string) (ap *types.ActiveProposal, ok bool) {
+	obj := gov.getObject(types.ActiveProposalKey(id), &types.ActiveProposal{})
+	if obj == nil {
+		return nil, false
+	} else {
+		return obj.(*types.ActiveProposal), true
+	}
+}
+
+func (gov *Governmint) SetActiveProposal(o *types.ActiveProposal) {
+	gov.setObject(types.ActiveProposalKey(o.Proposal.ID), *o)
+}
+
+func (gov *Governmint) GetGovMeta() (ap *types.GovMeta, ok bool) {
+	obj := gov.getObject(types.GovMetaKey, &types.GovMeta{})
+	if obj == nil {
+		return nil, false
+	} else {
+		return obj.(*types.GovMeta), true
+	}
+}
+
+func (gov *Governmint) SetGovMeta(o *types.GovMeta) {
+	gov.setObject(types.GovMetaKey, *o)
 }
