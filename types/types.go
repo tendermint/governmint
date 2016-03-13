@@ -55,7 +55,7 @@ type Proposal struct {
 }
 
 type ActiveProposal struct {
-	Proposal    Proposal     `json:"proposal"`
+	Proposal    `json:"proposal"`
 	SignedVotes []SignedVote `json:"signed_votes"`
 }
 
@@ -146,20 +146,12 @@ var _ = wire.RegisterInterface(
 
 //----------------------------------------
 
-// A simple tx to be signed by a single entity
-type SimpleTx interface {
-	EntityID() string
-	Signature() crypto.Signature
-}
-
 type ProposalTx struct {
 	EntityID  string           `json:"entity_id"`
 	Proposal  Proposal         `json:"proposal"`
 	Signature crypto.Signature `json:"signature"`
 }
 
-func (tx *ProposalTx) EntityID() string            { return tx.EntityID }
-func (tx *ProposalTx) Signature() crypto.Signature { return tx.Signature }
 func (tx *ProposalTx) SignBytes() []byte {
 	return wire.JSONBytes(tx.Proposal)
 }
@@ -169,8 +161,6 @@ type VoteTx struct {
 	Signature crypto.Signature `json:"signature"`
 }
 
-func (tx *VoteTx) EntityID() string            { return tx.Vote.EntityID }
-func (tx *VoteTx) Signature() crypto.Signature { return tx.Signature }
 func (tx *VoteTx) SignBytes() []byte {
 	return wire.JSONBytes(tx.Vote)
 }
