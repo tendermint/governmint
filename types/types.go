@@ -48,13 +48,17 @@ func NewSignedVote(vote Vote, sig crypto.Signature) SignedVote {
 	return SignedVote{vote, sig}
 }
 
+func (vote Vote) SignBytes() []byte { return wire.JSONBytes(vote) }
+
 type Proposal struct {
 	ID          string       `json:"id"`
 	VoteGroupID string       `json:"vote_group_id"`
-	Info        ProposalInfo `json:"info"`
 	StartHeight uint64       `json:"start_height"`
 	EndHeight   uint64       `json:"end_height"`
+	Info        ProposalInfo `json:"info"`
 }
+
+func (proposal Proposal) SignBytes() []byte { return wire.JSONBytes(proposal) }
 
 type ActiveProposal struct {
 	Proposal    `json:"proposal"`
@@ -119,18 +123,14 @@ type ProposalTx struct {
 	Signature crypto.Signature `json:"signature"`
 }
 
-func (tx *ProposalTx) SignBytes() []byte {
-	return wire.JSONBytes(tx.Proposal)
-}
+func (tx *ProposalTx) SignBytes() []byte { return tx.Proposal.SignBytes() }
 
 type VoteTx struct {
 	Vote      Vote             `json:"vote"`
 	Signature crypto.Signature `json:"signature"`
 }
 
-func (tx *VoteTx) SignBytes() []byte {
-	return wire.JSONBytes(tx.Vote)
-}
+func (tx *VoteTx) SignBytes() []byte { return tx.Vote.SignBytes() }
 
 type Tx interface {
 	SignBytes() []byte

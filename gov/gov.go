@@ -35,12 +35,11 @@ func NewGovernmint(eyesCli *eyes.Client) *Governmint {
 	return gov
 }
 
-// TMSP::Info
 func (gov *Governmint) Info() string {
 	return "Governmint v" + Version
 }
 
-func (gov *Governmint) RunTxParsed(tx types.Tx) (code tmsp.CodeType, result []byte, log string) {
+func (gov *Governmint) RunTx(tx types.Tx) (code tmsp.CodeType, result []byte, log string) {
 	switch tx := tx.(type) {
 	case *types.ProposalTx:
 		return gov.RunProposalTx(tx)
