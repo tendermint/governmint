@@ -100,10 +100,11 @@ func TestUnit(t *testing.T) {
 	{
 		ap := &types.ActiveProposal{
 			Proposal: types.Proposal{
-				ID: "my_proposal_id",
+				ID:          "my_proposal_id",
+				VoteGroupID: "my_vote_group_id",
 				Info: &types.GroupUpdateProposalInfo{
-					GroupID:     "my_group_id",
-					NextVersion: 1,
+					UpdateGroupID: "my_update_group_id",
+					NextVersion:   1,
 					ChangedMembers: []types.Member{
 						types.Member{
 							EntityID:    "entity1",
@@ -133,8 +134,11 @@ func TestUnit(t *testing.T) {
 		if !ok {
 			t.Error("Saved(set) ap does not exist")
 		}
-		if apCopy.Proposal.Info.(*types.GroupUpdateProposalInfo).GroupID != "my_group_id" {
-			t.Error("Got wrong ap proposal group id")
+		if apCopy.Proposal.VoteGroupID != "my_vote_group_id" {
+			t.Error("Got wrong ap proposal vote group id")
+		}
+		if apCopy.Proposal.Info.(*types.GroupUpdateProposalInfo).UpdateGroupID != "my_update_group_id" {
+			t.Error("Got wrong ap proposal update group id")
 		}
 		if apCopy.Proposal.Info.(*types.GroupUpdateProposalInfo).NextVersion != 1 {
 			t.Error("Got wrong ap proposal group version ")

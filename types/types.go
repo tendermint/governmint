@@ -50,6 +50,7 @@ func NewSignedVote(vote Vote, sig crypto.Signature) SignedVote {
 
 type Proposal struct {
 	ID          string       `json:"id"`
+	VoteGroupID string       `json:"vote_group_id"`
 	Info        ProposalInfo `json:"info"`
 	StartHeight uint64       `json:"start_height"`
 	EndHeight   uint64       `json:"end_height"`
@@ -62,47 +63,19 @@ type ActiveProposal struct {
 
 //----------------------------------------
 
-type GovMeta struct {
-	Height       uint64 // The current block height
-	NumEntities  int    // For EntityID generation
-	NumGroups    int    // For GroupID generation
-	NumProposals int    // For ProposalID generation
-}
-
-//----------------------------------------
-
-func EntityKey(entityID string) []byte {
-	return []byte("GOV:e:" + entityID)
-}
-
-func GroupKey(groupID string) []byte {
-	return []byte("GOV:g:" + groupID)
-}
-
-func ActiveProposalKey(proposalID string) []byte {
-	return []byte("GOV:ap:" + proposalID)
-}
-
-func GovMetaKey() []byte {
-	return []byte("GOV:meta")
-}
-
-//----------------------------------------
-
 type GroupCreateProposalInfo struct {
-	GroupID string   `json:"group_id"` // The new group's ID
-	Members []Member `json:"members"`  // The members of the new group
+	NewGroupID string   `json:"new_group_id"` // The new group's ID
+	Members    []Member `json:"members"`      // The members of the new group
 }
 
 type GroupUpdateProposalInfo struct {
-	GroupID        string   `json:"group_id"`        // The group to update
+	UpdateGroupID  string   `json:"update_group_id"` // The group to update
 	NextVersion    int      `json:"next_version"`    // The group's version, bumped 1
 	ChangedMembers []Member `json:"changed_members"` // 0 VotingPower to remove
 }
 
 type TextProposalInfo struct {
-	GroupID string `json:"group_id"`
-	Text    string `json:"text"`
+	Text string `json:"text"`
 }
 
 type UpgradeProposalInfoModule struct {
@@ -173,6 +146,33 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{ProposalTx{}, TxTypeProposal},
 	wire.ConcreteType{VoteTx{}, TxTypeVote},
 )
+
+//----------------------------------------
+
+type GovMeta struct {
+	Height       uint64 // The current block height
+	NumEntities  int    // For EntityID generation
+	NumGroups    int    // For GroupID generation
+	NumProposals int    // For ProposalID generation
+}
+
+//----------------------------------------
+
+func EntityKey(entityID string) []byte {
+	return []byte("GOV:e:" + entityID)
+}
+
+func GroupKey(groupID string) []byte {
+	return []byte("GOV:g:" + groupID)
+}
+
+func ActiveProposalKey(proposalID string) []byte {
+	return []byte("GOV:ap:" + proposalID)
+}
+
+func GovMetaKey() []byte {
+	return []byte("GOV:meta")
+}
 
 //----------------------------------------
 
