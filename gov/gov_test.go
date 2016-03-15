@@ -38,12 +38,12 @@ func TestUnit(t *testing.T) {
 		privKey := crypto.GenPrivKeyEd25519()
 		pubKey := privKey.PubKey()
 
-		gov.setEntity(&types.Entity{
+		gov.SetEntity(&types.Entity{
 			ID:     "my_entity_id",
 			PubKey: pubKey,
 		})
 
-		entityCopy, ok := gov.getEntity("my_entity_id")
+		entityCopy, ok := gov.GetEntity("my_entity_id")
 		if !ok {
 			t.Error("Saved(set) entity does not exist")
 		}
@@ -54,7 +54,7 @@ func TestUnit(t *testing.T) {
 			t.Error("Got wrong entity pubkey")
 		}
 
-		entityBad, ok := gov.getEntity("my_bad_id")
+		entityBad, ok := gov.GetEntity("my_bad_id")
 		if ok || entityBad != nil {
 			t.Error("Expected nil entity")
 		}
@@ -62,7 +62,7 @@ func TestUnit(t *testing.T) {
 
 	// Test Group
 	{
-		gov.setGroup(&types.Group{
+		gov.SetGroup(&types.Group{
 			ID:      "my_group_id",
 			Version: 1,
 			Members: []types.Member{
@@ -73,7 +73,7 @@ func TestUnit(t *testing.T) {
 			},
 		})
 
-		groupCopy, ok := gov.getGroup("my_group_id")
+		groupCopy, ok := gov.GetGroup("my_group_id")
 		if !ok {
 			t.Error("Saved(set) group does not exist")
 		}
@@ -90,7 +90,7 @@ func TestUnit(t *testing.T) {
 			t.Error("Group member's entity id is wrong")
 		}
 
-		groupBad, ok := gov.getGroup("my_bad_id")
+		groupBad, ok := gov.GetGroup("my_bad_id")
 		if ok || groupBad != nil {
 			t.Error("Expected nil group")
 		}
@@ -99,53 +99,54 @@ func TestUnit(t *testing.T) {
 	// Test ActiveProposal
 	{
 		ap := &types.ActiveProposal{
-			Proposal: &types.GroupUpdateProposal{
-				GroupID:      "my_group_id",
-				GroupVersion: 1,
-				AddMembers: []types.Member{
-					types.Member{
-						EntityID:    "entity1",
-						VotingPower: 1,
+			Proposal: types.Proposal{
+				ID: "my_proposal_id",
+				Info: &types.GroupUpdateProposalInfo{
+					GroupID:     "my_group_id",
+					NextVersion: 1,
+					ChangedMembers: []types.Member{
+						types.Member{
+							EntityID:    "entity1",
+							VotingPower: 1,
+						},
 					},
 				},
-				RemMembers: []types.Member{
-					types.Member{
-						EntityID:    "entity2",
-						VotingPower: 1,
-					},
-				},
+				StartHeight: 99,
+				EndHeight:   100,
 			},
-			Votes: []*types.Vote{
-				&types.Vote{
-					Value:     "my_vote",
+			SignedVotes: []types.SignedVote{
+				types.SignedVote{
+					Vote: types.Vote{
+						Height:     123,
+						EntityID:   "entity1",
+						ProposalID: "my_proposal_id",
+						Value:      "my_vote",
+					},
 					Signature: nil, // TODO set a sig
 				},
 			},
 		}
-		gov.setActiveProposal(ap)
-		proposalID := types.ProposalID(ap.Proposal)
+		gov.SetActiveProposal(ap)
+		proposalID := ap.Proposal.ID
 
-		apCopy, ok := gov.getActiveProposal(proposalID)
+		apCopy, ok := gov.GetActiveProposal(proposalID)
 		if !ok {
 			t.Error("Saved(set) ap does not exist")
 		}
-		if apCopy.Proposal.(*types.GroupUpdateProposal).GroupID != "my_group_id" {
+		if apCopy.Proposal.Info.(*types.GroupUpdateProposalInfo).GroupID != "my_group_id" {
 			t.Error("Got wrong ap proposal group id")
 		}
-		if apCopy.Proposal.(*types.GroupUpdateProposal).GroupVersion != 1 {
+		if apCopy.Proposal.Info.(*types.GroupUpdateProposalInfo).NextVersion != 1 {
 			t.Error("Got wrong ap proposal group version ")
 		}
-		if len(apCopy.Proposal.(*types.GroupUpdateProposal).AddMembers) != 1 {
-			t.Error("Got wrong ap proposal add members size")
+		if len(apCopy.Proposal.Info.(*types.GroupUpdateProposalInfo).ChangedMembers) != 1 {
+			t.Error("Got wrong ap proposal changed members size")
 		}
-		if len(apCopy.Proposal.(*types.GroupUpdateProposal).RemMembers) != 1 {
-			t.Error("Got wrong ap proposal add members size")
-		}
-		if len(apCopy.Votes) != 1 {
+		if len(apCopy.SignedVotes) != 1 {
 			t.Error("Got wrong ap proposal votes size")
 		}
 
-		apBad, ok := gov.getActiveProposal("my_bad_id")
+		apBad, ok := gov.GetActiveProposal("my_bad_id")
 		if ok || apBad != nil {
 			t.Error("Expected nil ap")
 		}

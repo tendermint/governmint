@@ -1,9 +1,9 @@
 package types
 
 import (
-	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
+	tmsp "github.com/tendermint/tmsp/types"
 )
 
 const (
@@ -17,9 +17,10 @@ type Entity struct {
 }
 
 type Group struct {
-	ID      string   `json:"id"`
-	Version int      `json:"version"`
-	Members []Member `json:"members"`
+	ID       string   `json:"id"`
+	ParentID string   `json:"parent_id"`
+	Version  int      `json:"version"`
+	Members  []Member `json:"members"`
 }
 
 type Member struct {
@@ -27,7 +28,7 @@ type Member struct {
 	VotingPower uint64 `json:"voting_power"`
 }
 
-func NewMember(entityID string, votingPower int) Member {
+func NewMember(entityID string, votingPower uint64) Member {
 	return Member{entityID, votingPower}
 }
 
@@ -82,31 +83,27 @@ func ActiveProposalKey(proposalID string) []byte {
 	return []byte("GOV:ap:" + proposalID)
 }
 
-const GovMetaKey = "GOV:meta"
+func GovMetaKey() []byte {
+	return []byte("GOV:meta")
+}
 
 //----------------------------------------
 
 type GroupCreateProposalInfo struct {
-	GroupID string   `json:"group_id"`
-	Members []Member `json:"members"`
+	GroupID string   `json:"group_id"` // The new group's ID
+	Members []Member `json:"members"`  // The members of the new group
 }
-
-func (p GroupCreateProposalInfo) GetGroupID() string { return p.GroupID }
 
 type GroupUpdateProposalInfo struct {
-	GroupID        string   `json:"group_id"`
-	GroupVersion   int      `json:"group_version"`
+	GroupID        string   `json:"group_id"`        // The group to update
+	NextVersion    int      `json:"next_version"`    // The group's version, bumped 1
 	ChangedMembers []Member `json:"changed_members"` // 0 VotingPower to remove
 }
-
-func (p GroupUpdateProposalInfo) GetGroupID() string { return p.GroupID }
 
 type TextProposalInfo struct {
 	GroupID string `json:"group_id"`
 	Text    string `json:"text"`
 }
-
-func (p TextProposalInfo) GetGroupID() string { return p.GroupID }
 
 type UpgradeProposalInfoModule struct {
 	Name   string `json:"module"`
@@ -117,11 +114,8 @@ type UpgradeProposalInfo struct {
 	Modules []UpgradeProposalInfoModule
 }
 
-func (p UpgradeProposalInfo) GetGroupID() string { return AdminGroupID }
-
 type ProposalInfo interface {
 	AssertIsProposalInfo()
-	GetGroupID() string
 }
 
 const (

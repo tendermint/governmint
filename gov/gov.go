@@ -1,6 +1,8 @@
 package gov
 
 import (
+	. "github.com/tendermint/go-common"
+	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
 	"github.com/tendermint/governmint/types"
 	eyes "github.com/tendermint/merkleeyes/client"
@@ -13,13 +15,13 @@ const (
 )
 
 type Governmint struct {
-	*GovMeta
+	*types.GovMeta
 	eyesCli *eyes.Client
 }
 
 func NewGovernmint(eyesCli *eyes.Client) *Governmint {
 	gov := &Governmint{
-		GovMeta: &GovMeta{
+		GovMeta: &types.GovMeta{
 			Height:       0,
 			NumEntities:  0,
 			NumGroups:    0,
@@ -30,7 +32,7 @@ func NewGovernmint(eyesCli *eyes.Client) *Governmint {
 	if meta, ok := gov.GetGovMeta(); ok {
 		gov.GovMeta = meta
 	}
-	return
+	return gov
 }
 
 // TMSP::Info
@@ -46,10 +48,11 @@ func (gov *Governmint) RunTxParsed(tx types.Tx) (code tmsp.CodeType, result []by
 		return gov.RunVoteTx(tx)
 	default:
 		PanicSanity("Unknown tx type")
+		return
 	}
 }
 
-func (gov *Governmint) RunProposalTx(tx types.ProposalTx) (code tmsp.CodeType, result []byte, log string) {
+func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) (code tmsp.CodeType, result []byte, log string) {
 	// Ensure that proposer exists
 	entity, ok := gov.GetEntity(tx.EntityID)
 	if !ok {
@@ -57,26 +60,17 @@ func (gov *Governmint) RunProposalTx(tx types.ProposalTx) (code tmsp.CodeType, r
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
-	if !entity.PubKey.Verify(signBytes, tx.Signature) {
+	if !entity.PubKey.VerifyBytes(signBytes, tx.Signature) {
 		return tmsp.CodeType_Unauthorized, nil, Fmt("Invalid signature")
 	}
-	// Ensure that group exists
-	group, ok := gov.GetGroup(tx.Proposal.GetGroupID())
-	if !ok {
-		return tmsp.CodeType_GovUnknownGroup, nil, Fmt("Group %v unknown", tx.Proposal.GetGroupID())
-	}
-	// Ensure that the proposer belongs to the group
-	if !isMemberOf(group, tx.EntityID) {
-		return tmsp.CodeType_Unauthorized, nil, Fmt("Proposer %v is not member of %v", tx.EntityID, group.ID)
-	}
 	// Ensure that the proposal is valid
-	tmspErr := gov.validateProposal(tx.Proposal)
+	tmspErr := gov.validateProposal(tx.Proposal, entity)
 	if !tmspErr.IsOK() {
 		return tmspErr.Code, nil, tmspErr.Log
 	}
 	// Good! Create a new proposal
 	proposal := tx.Proposal
-	aProposal := &ActiveProposal{
+	aProposal := &types.ActiveProposal{
 		Proposal:    proposal,
 		SignedVotes: nil,
 	}
@@ -84,32 +78,35 @@ func (gov *Governmint) RunProposalTx(tx types.ProposalTx) (code tmsp.CodeType, r
 	return tmsp.CodeType_OK, nil, Fmt("Proposal created")
 }
 
-func (gov *Governmint) RunVoteTx(tx types.VoteTx) (code tmsp.CodeType, result []byte, log string) {
+func (gov *Governmint) RunVoteTx(tx *types.VoteTx) (code tmsp.CodeType, result []byte, log string) {
 	// Ensure that voter exists
-	entity, ok := gov.GetEntity(tx.EntityID)
+	entity, ok := gov.GetEntity(tx.Vote.EntityID)
 	if !ok {
-		return tmsp.CodeType_GovUnknownEntity, nil, Fmt("Entity %v unknown", tx.EntityID)
+		return tmsp.CodeType_GovUnknownEntity, nil, Fmt("Entity %v unknown", tx.Vote.EntityID)
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
-	if !entity.PubKey.Verify(signBytes, tx.Signature) {
+	if !entity.PubKey.VerifyBytes(signBytes, tx.Signature) {
 		return tmsp.CodeType_Unauthorized, nil, Fmt("Invalid signature")
 	}
 	// Ensure that the proposal exists
-	if aProposal, ok := gov.GetActiveProposal(v.Vote.ProposalID); !ok {
-		return tmsp.CodeType_GovUnknownProposal, nil, Fmt("Unknown proposal %v", v.Vote.ProposalID)
+	aProposal, ok := gov.GetActiveProposal(tx.Vote.ProposalID)
+	if !ok {
+		return tmsp.CodeType_GovUnknownProposal, nil, Fmt("Unknown proposal %v", tx.Vote.ProposalID)
 	}
 	// Ensure that the vote's height is <= current height
-	if !(vote.Height <= app.GovMeta.Height) {
+	if !(tx.Vote.Height <= gov.GovMeta.Height) {
 		return tmsp.CodeType_GovInvalidVote, nil, Fmt("Vote height is invalid")
 	}
 	// Ensure that the vote's height matches the proposal's range
-	if !(aProposal.StartHeight <= vote.Height <= aProposal.EndHeight) {
+	if !(aProposal.StartHeight <= tx.Vote.Height &&
+		tx.Vote.Height <= aProposal.EndHeight) {
 		return tmsp.CodeType_GovInvalidVote, nil, Fmt("Vote height is invalid")
 	}
 	// Ensure that the group exists, if specified
 	var group *types.Group
-	groupID = tx.Proposal.GetGroupID()
+	// XXX refactor
+	groupID := tx.Proposal.GetGroupID()
 	if groupID != "" {
 		ok := false
 		group, ok := gov.GetGroup(groupID)
@@ -126,9 +123,9 @@ func (gov *Governmint) RunVoteTx(tx types.VoteTx) (code tmsp.CodeType, result []
 		return tmsp.CodeType_GovDuplicateVote, nil, Fmt("Voter %v already voted", entity.ID)
 	}
 	// Good! Add a SignedVote
-	aProposal.SignedVotes = append(aProposal.SignedVotes, SignedVote{
-		Vote:      aProposal.Vote,
-		Signature: aProposal.Signature,
+	aProposal.SignedVotes = append(aProposal.SignedVotes, types.SignedVote{
+		Vote:      tx.Vote,
+		Signature: tx.Signature,
 	})
 	gov.SetActiveProposal(aProposal)
 	return tmsp.CodeType_OK, nil, Fmt("Vote added to ActiveProposal")
@@ -149,21 +146,26 @@ func (gov *Governmint) Query(query []byte) (code tmsp.CodeType, result []byte, l
 */
 
 // TMSP::InitChain
-func (app *Governmint) InitChain(validators []*tmsp.Validator) {
+func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
 	// Construct a group of entities for the validators.
-	vGroup := &Group{
+	vGroup := &types.Group{
 		ID:      types.ValidatorsGroupID,
 		Version: 0,
 	}
 	for i, validator := range validators {
+		var pubKey crypto.PubKey
+		err := wire.ReadBinaryBytes(validator.PubKey, &pubKey)
+		if err != nil {
+			PanicSanity("Error reading validator pubkey: " + err.Error())
+		}
 		// Create an entity with this validator
-		entity := &Entity{
+		entity := &types.Entity{
 			ID:     Fmt("%v", i),
-			PubKey: validator.PubKey,
+			PubKey: pubKey,
 		}
 		gov.SetEntity(entity)
 		// Add as member
-		member := Member{
+		member := types.Member{
 			EntityID:    entity.ID,
 			VotingPower: validator.Power,
 		}
@@ -174,25 +176,25 @@ func (app *Governmint) InitChain(validators []*tmsp.Validator) {
 }
 
 // TMSP::EndBlock
-func (app *Governmint) EndBlock(height uint64) (changedValidators []*tmsp.Validator) {
-	app.GovMeta.Height = height + 1
+func (gov *Governmint) EndBlock(height uint64) (changedValidators []*tmsp.Validator) {
+	gov.GovMeta.Height = height + 1
 	// Persist GovMeta
-	app.SetGovMeta(app.GovMeta)
+	gov.SetGovMeta(gov.GovMeta)
 	// XXX Changed Validators
 	return
 }
 
 //----------------------------------------
 
-func (gov *Governmint) validateProposal(p types.Proposal) (err types.TMSPError) {
+func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity) (err types.TMSPError) {
 	// Ensure that the proposal is unique
 	if _, exists := gov.GetActiveProposal(p.ID); exists {
 		return types.TMSPError{tmsp.CodeType_GovDuplicateProposal,
 			Fmt("Proposal with id %v already exists", p.ID)}
 	}
-	// Ensure that the
-	switch p := p.(type) {
-	case *types.GroupCreateProposal:
+	// Type dependent checks
+	switch p := p.Info.(type) {
+	case *types.GroupCreateProposalInfo:
 		// Ensure that the group does not exist
 		if _, exists := gov.GetGroup(p.GroupID); exists {
 			return types.TMSPError{tmsp.CodeType_GovDuplicateGroup,
@@ -221,11 +223,17 @@ func (gov *Governmint) validateProposal(p types.Proposal) (err types.TMSPError) 
 			return types.TMSPError{tmsp.CodeType_GovUnknownEntity,
 				Fmt("Group creation with unknown entity %v", unknownEntityID)}
 		}
-	case *types.GroupUpdateProposal:
-		// Ensure that the group does exist
-		if group, ok := gov.GetGroup(p.GroupID); !ok {
+	case *types.GroupUpdateProposalInfo:
+		// Ensure that the group exists
+		group, ok := gov.GetGroup(p.GroupID)
+		if !ok {
 			return types.TMSPError{tmsp.CodeType_GovUnknownGroup,
 				Fmt("Group with id %v doesn't exist", p.GroupID)}
+		}
+		// Ensure that the proposer belongs to the group
+		if !isMemberOf(group, proposer.ID) {
+			return types.TMSPError{tmsp.CodeType_Unauthorized,
+				Fmt("Proposer %v is not member of %v", proposer.ID, group.ID)}
 		}
 		// Ensure that the member entities are unique
 		if ok, dupe := validateUniqueMembers(p.ChangedMembers); !ok {
@@ -249,17 +257,29 @@ func (gov *Governmint) validateProposal(p types.Proposal) (err types.TMSPError) 
 			return types.TMSPError{tmsp.CodeType_GovUnknownEntity,
 				Fmt("Group creation with unknown entity %v", unknownEntityID)}
 		}
-	case *types.TextProposal:
-		// Ensure that the group does exist
-		if group, ok := gov.GetGroup(p.GroupID); !ok {
+	case *types.TextProposalInfo:
+		// Ensure that the group exists
+		group, ok := gov.GetGroup(p.GroupID)
+		if !ok {
 			return types.TMSPError{tmsp.CodeType_GovUnknownGroup,
 				Fmt("Group with id %v doesn't exist", p.GroupID)}
 		}
-	case *types.UpgradeProposal:
+		// Ensure that the proposer belongs to the group
+		if !isMemberOf(group, proposer.ID) {
+			return types.TMSPError{tmsp.CodeType_Unauthorized,
+				Fmt("Proposer %v is not member of %v", proposer.ID, group.ID)}
+		}
+	case *types.UpgradeProposalInfo:
 		// Ensure that the Admin group exists
-		if group, ok := gov.GetGroup(types.AdminGroupID); !ok {
+		group, ok := gov.GetGroup(types.AdminGroupID)
+		if !ok {
 			return types.TMSPError{tmsp.CodeType_GovUnknownGroup,
 				Fmt("Admin group does not exist")}
+		}
+		// Ensure that the proposer belongs to the group
+		if !isMemberOf(group, proposer.ID) {
+			return types.TMSPError{tmsp.CodeType_Unauthorized,
+				Fmt("Proposer %v is not member of %v", proposer.ID, group.ID)}
 		}
 		// Ensure that the number of modules is > 0.
 		if len(p.Modules) == 0 {
@@ -300,7 +320,7 @@ func (gov *Governmint) loadEntities(entityIDs []string) ([]*types.Entity, string
 		if !ok {
 			return nil, entityID
 		}
-		entityIDs[i] = member.EntityID
+		entities[i] = entity
 	}
 	return entities, ""
 }
@@ -394,7 +414,7 @@ func (gov *Governmint) SetActiveProposal(o *types.ActiveProposal) {
 }
 
 func (gov *Governmint) GetGovMeta() (ap *types.GovMeta, ok bool) {
-	obj := gov.getObject(types.GovMetaKey, &types.GovMeta{})
+	obj := gov.getObject(types.GovMetaKey(), &types.GovMeta{})
 	if obj == nil {
 		return nil, false
 	} else {
@@ -403,5 +423,5 @@ func (gov *Governmint) GetGovMeta() (ap *types.GovMeta, ok bool) {
 }
 
 func (gov *Governmint) SetGovMeta(o *types.GovMeta) {
-	gov.setObject(types.GovMetaKey, *o)
+	gov.setObject(types.GovMetaKey(), *o)
 }
