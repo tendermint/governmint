@@ -3,7 +3,6 @@ package types
 import (
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	tmsp "github.com/tendermint/tmsp/types"
 )
 
 const (
@@ -172,15 +171,4 @@ func ActiveProposalKey(proposalID string) []byte {
 
 func GovMetaKey() []byte {
 	return []byte("GOV:meta")
-}
-
-//----------------------------------------
-
-type TMSPError struct {
-	Code tmsp.CodeType
-	Log  string
-}
-
-func (tmspErr TMSPError) IsOK() bool {
-	return tmspErr.Code == tmsp.CodeType_OK
 }

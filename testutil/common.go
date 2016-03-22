@@ -56,7 +56,7 @@ type PrivEntity struct {
 	PrivKey crypto.PrivKey
 }
 
-// Entities with ids "id(SECRET)"
+// By testing convention, entities have ids "id(SECRET)"
 func Entities(secrets []string) []PrivEntity {
 	entities := make([]PrivEntity, len(secrets))
 	for i, secret := range secrets {

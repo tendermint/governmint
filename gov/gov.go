@@ -39,7 +39,7 @@ func (gov *Governmint) Info() string {
 	return "Governmint v" + Version
 }
 
-func (gov *Governmint) RunTx(tx types.Tx) (code tmsp.CodeType, result []byte, log string) {
+func (gov *Governmint) RunTx(tx types.Tx) tmsp.Result {
 	switch tx := tx.(type) {
 	case *types.ProposalTx:
 		return gov.RunProposalTx(tx)
@@ -47,25 +47,27 @@ func (gov *Governmint) RunTx(tx types.Tx) (code tmsp.CodeType, result []byte, lo
 		return gov.RunVoteTx(tx)
 	default:
 		PanicSanity("Unknown tx type")
-		return
+		return tmsp.NewError(tmsp.CodeType_InternalError, "Unknown tx type")
 	}
 }
 
-func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) (code tmsp.CodeType, result []byte, log string) {
+func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) tmsp.Result {
 	// Ensure that proposer exists
 	entity, ok := gov.GetEntity(tx.EntityID)
 	if !ok {
-		return tmsp.CodeType_GovUnknownEntity, nil, Fmt("Entity %v unknown", tx.EntityID)
+		return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
+			Fmt("Entity %v unknown", tx.EntityID))
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
 	if !entity.PubKey.VerifyBytes(signBytes, tx.Signature) {
-		return tmsp.CodeType_Unauthorized, nil, Fmt("Invalid signature")
+		return tmsp.NewError(tmsp.CodeType_Unauthorized,
+			Fmt("Invalid signature"))
 	}
 	// Ensure that the proposal is valid
 	tmspErr := gov.validateProposal(tx.Proposal, entity)
 	if !tmspErr.IsOK() {
-		return tmspErr.Code, nil, tmspErr.Log
+		return tmspErr
 	}
 	// Good! Create a new proposal
 	proposal := tx.Proposal
@@ -74,46 +76,54 @@ func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) (code tmsp.CodeType, 
 		SignedVotes: nil,
 	}
 	gov.SetActiveProposal(aProposal)
-	return tmsp.CodeType_OK, nil, Fmt("Proposal created")
+	return tmsp.NewResultOK(nil, "Proposal created")
 }
 
-func (gov *Governmint) RunVoteTx(tx *types.VoteTx) (code tmsp.CodeType, result []byte, log string) {
+func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
 	// Ensure that voter exists
 	entity, ok := gov.GetEntity(tx.Vote.EntityID)
 	if !ok {
-		return tmsp.CodeType_GovUnknownEntity, nil, Fmt("Entity %v unknown", tx.Vote.EntityID)
+		return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
+			Fmt("Entity %v unknown", tx.Vote.EntityID))
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
 	if !entity.PubKey.VerifyBytes(signBytes, tx.Signature) {
-		return tmsp.CodeType_Unauthorized, nil, Fmt("Invalid signature")
+		return tmsp.NewError(tmsp.CodeType_Unauthorized,
+			Fmt("Invalid signature"))
 	}
 	// Ensure that the proposal exists
 	aProposal, ok := gov.GetActiveProposal(tx.Vote.ProposalID)
 	if !ok {
-		return tmsp.CodeType_GovUnknownProposal, nil, Fmt("Unknown proposal %v", tx.Vote.ProposalID)
+		return tmsp.NewError(tmsp.CodeType_GovUnknownProposal,
+			Fmt("Unknown proposal %v", tx.Vote.ProposalID))
 	}
 	// Ensure that the vote's height is <= current height
 	if !(tx.Vote.Height <= gov.GovMeta.Height) {
-		return tmsp.CodeType_GovInvalidVote, nil, Fmt("Vote height is invalid")
+		return tmsp.NewError(tmsp.CodeType_GovInvalidVote,
+			Fmt("Vote height is invalid"))
 	}
 	// Ensure that the vote's height matches the proposal's range
 	if !(aProposal.StartHeight <= tx.Vote.Height &&
 		tx.Vote.Height <= aProposal.EndHeight) {
-		return tmsp.CodeType_GovInvalidVote, nil, Fmt("Vote height is invalid")
+		return tmsp.NewError(tmsp.CodeType_GovInvalidVote,
+			Fmt("Vote height is invalid"))
 	}
 	// Fetch the proposal's voting group
 	voteGroup, ok := gov.GetGroup(aProposal.VoteGroupID)
 	if !ok {
-		return tmsp.CodeType_GovUnknownGroup, nil, Fmt("Vote group with id %v doesn't exist", aProposal.VoteGroupID)
+		return tmsp.NewError(tmsp.CodeType_GovUnknownGroup,
+			Fmt("Vote group with id %v doesn't exist", aProposal.VoteGroupID))
 	}
 	// Ensure that the voter belongs to the voting group
 	if !isMemberOf(voteGroup, entity.ID) {
-		return tmsp.CodeType_GovInvalidMember, nil, Fmt("Voter %v not a member of %v", entity.ID, voteGroup.ID)
+		return tmsp.NewError(tmsp.CodeType_GovInvalidMember,
+			Fmt("Voter %v not a member of %v", entity.ID, voteGroup.ID))
 	}
 	// Ensure that the voter hasn't already voted
 	if exists, _ := hasVoted(aProposal, entity.ID); exists {
-		return tmsp.CodeType_GovDuplicateVote, nil, Fmt("Voter %v already voted", entity.ID)
+		return tmsp.NewError(tmsp.CodeType_GovDuplicateVote,
+			Fmt("Voter %v already voted", entity.ID))
 	}
 	// Good! Add a SignedVote
 	aProposal.SignedVotes = append(aProposal.SignedVotes, types.SignedVote{
@@ -121,19 +131,12 @@ func (gov *Governmint) RunVoteTx(tx *types.VoteTx) (code tmsp.CodeType, result [
 		Signature: tx.Signature,
 	})
 	gov.SetActiveProposal(aProposal)
-	return tmsp.CodeType_OK, nil, Fmt("Vote added to ActiveProposal")
+	return tmsp.NewResultOK(nil, "Vote added to ActiveProposal")
 }
-
-/*
-// TMSP::CheckTx
-func (gov *Governmint) CheckTx(txBytes []byte) (code tmsp.CodeType, result []byte, log string) {
-	return // XXX
-}
-*/
 
 /*
 // TMSP::Query
-func (gov *Governmint) Query(query []byte) (code tmsp.CodeType, result []byte, log string) {
+func (gov *Governmint) Query(query []byte) tmsp.Result {
 	return // XXX
 }
 */
@@ -179,70 +182,70 @@ func (gov *Governmint) EndBlock(height uint64) (changedValidators []*tmsp.Valida
 
 //----------------------------------------
 
-func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity) (err types.TMSPError) {
+func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity) (res tmsp.Result) {
 	// Ensure that the proposal is unique
 	if _, exists := gov.GetActiveProposal(p.ID); exists {
-		return types.TMSPError{tmsp.CodeType_GovDuplicateProposal,
-			Fmt("Proposal with id %v already exists", p.ID)}
+		return tmsp.NewError(tmsp.CodeType_GovDuplicateProposal,
+			Fmt("Proposal with id %v already exists", p.ID))
 	}
 	// Ensure that the voting group exists
 	voteGroup, ok := gov.GetGroup(p.VoteGroupID)
 	if !ok {
-		return types.TMSPError{tmsp.CodeType_GovUnknownGroup,
-			Fmt("Vote group with id %v doesn't exist", p.VoteGroupID)}
+		return tmsp.NewError(tmsp.CodeType_GovUnknownGroup,
+			Fmt("Vote group with id %v doesn't exist", p.VoteGroupID))
 	}
 	// Ensure that the proposer belongs to the voting group
 	if !isMemberOf(voteGroup, proposer.ID) {
-		return types.TMSPError{tmsp.CodeType_Unauthorized,
-			Fmt("Proposer %v is not member of %v", proposer.ID, voteGroup.ID)}
+		return tmsp.NewError(tmsp.CodeType_Unauthorized,
+			Fmt("Proposer %v is not member of %v", proposer.ID, voteGroup.ID))
 	}
 	// Type dependent checks
 	switch pInfo := p.Info.(type) {
 	case *types.GroupCreateProposalInfo:
 		// Ensure that the group ID is not taken
 		if _, exists := gov.GetGroup(pInfo.NewGroupID); exists {
-			return types.TMSPError{tmsp.CodeType_GovDuplicateGroup,
-				Fmt("Group with id %v already exists", pInfo.NewGroupID)}
+			return tmsp.NewError(tmsp.CodeType_GovDuplicateGroup,
+				Fmt("Group with id %v already exists", pInfo.NewGroupID))
 		}
 		// Ensure that the member entities are unique
 		if ok, dupe := validateUniqueMembers(pInfo.Members); !ok {
-			return types.TMSPError{tmsp.CodeType_GovDuplicateMember,
-				Fmt("Duplicate member %v", dupe)}
+			return tmsp.NewError(tmsp.CodeType_GovDuplicateMember,
+				Fmt("Duplicate member %v", dupe))
 		}
 		// Ensure that the member voting powers are reasonable
 		for _, member := range pInfo.Members {
 			if member.VotingPower == 0 {
-				return types.TMSPError{tmsp.CodeType_GovInvalidVotingPower,
-					Fmt("Member cannot have 0 voting power")}
+				return tmsp.NewError(tmsp.CodeType_GovInvalidVotingPower,
+					Fmt("Member cannot have 0 voting power"))
 			}
 			if member.VotingPower > MaxVotingPower {
-				return types.TMSPError{tmsp.CodeType_GovInvalidVotingPower,
-					Fmt("Member voting power too large")}
+				return tmsp.NewError(tmsp.CodeType_GovInvalidVotingPower,
+					Fmt("Member voting power too large"))
 			}
 		}
 		// Ensure that all the entities exist
 		entityIDs := entityIDsFromMembers(pInfo.Members)
 		_, unknownEntityID := gov.loadEntities(entityIDs)
 		if unknownEntityID != "" {
-			return types.TMSPError{tmsp.CodeType_GovUnknownEntity,
-				Fmt("Group creation with unknown entity %v", unknownEntityID)}
+			return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
+				Fmt("Group creation with unknown entity %v", unknownEntityID))
 		}
 	case *types.GroupUpdateProposalInfo:
 		// Ensure that the update group exists
 		updateGroup, ok := gov.GetGroup(pInfo.UpdateGroupID)
 		if !ok {
-			return types.TMSPError{tmsp.CodeType_GovUnknownGroup,
-				Fmt("Group with id %v doesn't exist", pInfo.UpdateGroupID)}
+			return tmsp.NewError(tmsp.CodeType_GovUnknownGroup,
+				Fmt("Group with id %v doesn't exist", pInfo.UpdateGroupID))
 		}
 		// Ensure that the update group's parent is the voting group
 		if updateGroup.ParentID != voteGroup.ID {
-			return types.TMSPError{tmsp.CodeType_Unauthorized,
-				Fmt("Voting group %v cannot update %v", voteGroup.ID, updateGroup.ID)}
+			return tmsp.NewError(tmsp.CodeType_Unauthorized,
+				Fmt("Voting group %v cannot update %v", voteGroup.ID, updateGroup.ID))
 		}
 		// Ensure that the member entities are unique
 		if ok, dupe := validateUniqueMembers(pInfo.ChangedMembers); !ok {
-			return types.TMSPError{tmsp.CodeType_GovDuplicateMember,
-				Fmt("Duplicate member %v", dupe)}
+			return tmsp.NewError(tmsp.CodeType_GovDuplicateMember,
+				Fmt("Duplicate member %v", dupe))
 		}
 		// Ensure that the member voting powers are reasonable
 		for _, member := range pInfo.ChangedMembers {
@@ -250,32 +253,32 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 				// This is fine, we're removing members.
 			}
 			if member.VotingPower > MaxVotingPower {
-				return types.TMSPError{tmsp.CodeType_GovInvalidVotingPower,
-					Fmt("Member voting power too large")}
+				return tmsp.NewError(tmsp.CodeType_GovInvalidVotingPower,
+					Fmt("Member voting power too large"))
 			}
 		}
 		// Ensure that all the entities exist
 		entityIDs := entityIDsFromMembers(pInfo.ChangedMembers)
 		_, unknownEntityID := gov.loadEntities(entityIDs)
 		if unknownEntityID != "" {
-			return types.TMSPError{tmsp.CodeType_GovUnknownEntity,
-				Fmt("Group creation with unknown entity %v", unknownEntityID)}
+			return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
+				Fmt("Group creation with unknown entity %v", unknownEntityID))
 		}
 	case *types.TextProposalInfo:
 		// TODO text string validation, e.g. max length
 	case *types.UpgradeProposalInfo:
 		// Ensure that the group is admin.
 		if voteGroup.ID != types.AdminGroupID {
-			return types.TMSPError{tmsp.CodeType_Unauthorized,
-				Fmt("Upgrade proposals must be voted on by admin group")}
+			return tmsp.NewError(tmsp.CodeType_Unauthorized,
+				Fmt("Upgrade proposals must be voted on by admin group"))
 		}
 		// Ensure that the number of modules is > 0.
 		if len(pInfo.Modules) == 0 {
-			return types.TMSPError{tmsp.CodeType_EncodingError,
-				Fmt("Software upgrade requires > 0 modules")}
+			return tmsp.NewError(tmsp.CodeType_EncodingError,
+				Fmt("Software upgrade requires > 0 modules"))
 		}
 	}
-	return types.TMSPError{tmsp.CodeType_OK, ""}
+	return tmsp.NewResultOK(nil, "")
 }
 
 // Returns (true, "") if members are unique

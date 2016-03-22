@@ -25,7 +25,7 @@ func TestIntegration(t *testing.T) {
 		tmsputil.Validator("entity3", 1),
 	})
 
-	code, result, log := gov.RunTx(govutil.ProposalTx("secret1",
+	res := gov.RunTx(govutil.ProposalTx("secret1",
 		"my_proposal_id", "my_vote_group_id", 0, 1,
 		&types.GroupCreateProposalInfo{
 			NewGroupID: "new_group_id",
@@ -33,5 +33,5 @@ func TestIntegration(t *testing.T) {
 		},
 	))
 
-	t.Log(code, result, log)
+	t.Log(res.Code, res.Data, res.Log)
 }
