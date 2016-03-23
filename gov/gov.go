@@ -340,14 +340,14 @@ func hasVoted(aProposal *types.ActiveProposal, entityID string) (bool, int) {
 // objPtr: pointer to the object to populate, if value exists for key
 // Use the return value, so nil can be returned for keys with no value.
 func (gov *Governmint) getObject(key []byte, objPtr interface{}) interface{} {
-	objBytes, err := gov.eyesCli.GetSync(key)
-	if err != nil {
-		panic("Error getting obj: " + err.Error())
+	res := gov.eyesCli.GetSync(key)
+	if res.IsErr() {
+		panic("Error getting obj: " + res.Error())
 	}
-	if len(objBytes) == 0 {
+	if len(res.Data) == 0 {
 		return nil // NOTE must use return value
 	}
-	err = wire.ReadBinaryBytes(objBytes, objPtr)
+	err := wire.ReadBinaryBytes(res.Data, objPtr)
 	if err != nil {
 		panic("Error parsing obj: " + err.Error())
 	}
@@ -359,9 +359,9 @@ func (gov *Governmint) getObject(key []byte, objPtr interface{}) interface{} {
 // remember to wrap in struct{MyInterface}{obj}.
 func (gov *Governmint) setObject(key []byte, obj interface{}) {
 	objBytes := wire.BinaryBytes(obj)
-	err := gov.eyesCli.SetSync(key, objBytes)
-	if err != nil {
-		panic("Error setting obj: " + err.Error())
+	res := gov.eyesCli.SetSync(key, objBytes)
+	if res.IsErr() {
+		panic("Error setting obj: " + res.Error())
 	}
 }
 
