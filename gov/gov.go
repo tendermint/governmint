@@ -40,6 +40,37 @@ func (gov *Governmint) Info() string {
 	return "Governmint v" + Version
 }
 
+func (gov *Governmint) SetOption(key string, value string) (log string) {
+	switch key {
+	case "admin":
+		// Read admin account
+		var adminEntity = new(types.Entity)
+		err := wire.ReadJSONBytes([]byte(value), adminEntity)
+		if err != nil {
+			return "Error decoding admin message: " + err.Error()
+		}
+		if adminEntity.ID == "" {
+			adminEntity.ID = "admin"
+		}
+		gov.SetEntity(adminEntity)
+		// Construct a group for admin
+		adminGroup := &types.Group{
+			ID:      types.AdminGroupID,
+			Version: 0,
+		}
+		adminGroup.Members = []types.Member{
+			types.Member{
+				EntityID:    adminEntity.ID,
+				VotingPower: 1,
+			},
+		}
+		// Save admin group
+		gov.SetGroup(adminGroup)
+
+	}
+	return "Unrecognized governmint option key " + key
+}
+
 // Implements basecoin.Plugin
 func (gov *Governmint) CallTx(ctx base.CallContext, txBytes []byte) tmsp.Result {
 	var tx types.Tx
