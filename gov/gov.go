@@ -1,6 +1,7 @@
 package gov
 
 import (
+	base "github.com/tendermint/basecoin/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
@@ -37,6 +38,16 @@ func NewGovernmint(eyesCli *eyes.Client) *Governmint {
 
 func (gov *Governmint) Info() string {
 	return "Governmint v" + Version
+}
+
+// Implements basecoin.Plugin
+func (gov *Governmint) CallTx(ctx base.CallContext, txBytes []byte) tmsp.Result {
+	var tx types.Tx
+	err := wire.ReadBinaryBytes(txBytes, &tx)
+	if err != nil {
+		return tmsp.ErrEncodingError.SetLog(Fmt("Error parsing Governmint tx bytes: %v", err.Error()))
+	}
+	return gov.RunTx(tx)
 }
 
 func (gov *Governmint) RunTx(tx types.Tx) tmsp.Result {
