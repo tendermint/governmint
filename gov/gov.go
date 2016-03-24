@@ -66,7 +66,7 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 		}
 		// Save admin group
 		gov.SetGroup(adminGroup)
-
+		return "Success"
 	}
 	return "Unrecognized governmint option key " + key
 }
