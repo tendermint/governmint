@@ -176,12 +176,15 @@ func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
 	return tmsp.NewResultOK(nil, "Vote added to ActiveProposal")
 }
 
-/*
 // TMSP::Query
 func (gov *Governmint) Query(query []byte) tmsp.Result {
-	return // XXX
+	return tmsp.OK.SetLog("Query not supported")
 }
-*/
+
+// TMSP::Commit
+func (gov *Governmint) Commit() tmsp.Result {
+	return tmsp.OK
+}
 
 // TMSP::InitChain
 func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
