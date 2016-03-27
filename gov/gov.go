@@ -72,16 +72,16 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 }
 
 // Implements basecoin.Plugin
-func (gov *Governmint) CallTx(ctx base.CallContext, txBytes []byte) tmsp.Result {
+func (gov *Governmint) RunTx(ctx base.CallContext, txBytes []byte) tmsp.Result {
 	var tx types.Tx
 	err := wire.ReadBinaryBytes(txBytes, &tx)
 	if err != nil {
 		return tmsp.ErrEncodingError.SetLog(Fmt("Error parsing Governmint tx bytes: %v", err.Error()))
 	}
-	return gov.RunTx(tx)
+	return gov.RunTxParsed(tx)
 }
 
-func (gov *Governmint) RunTx(tx types.Tx) tmsp.Result {
+func (gov *Governmint) RunTxParsed(tx types.Tx) tmsp.Result {
 	switch tx := tx.(type) {
 	case *types.ProposalTx:
 		return gov.RunProposalTx(tx)
