@@ -1,6 +1,7 @@
 package gov
 
 import (
+	"bytes"
 	base "github.com/tendermint/basecoin/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
@@ -49,9 +50,6 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 		if err != nil {
 			return "Error decoding admin message: " + err.Error()
 		}
-		if adminEntity.ID == "" {
-			adminEntity.ID = "admin"
-		}
 		gov.SetEntity(adminEntity)
 		// Construct a group for admin
 		adminGroup := &types.Group{
@@ -60,7 +58,7 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 		}
 		adminGroup.Members = []types.Member{
 			types.Member{
-				EntityID:    adminEntity.ID,
+				EntityAddr:  adminEntity.Addr,
 				VotingPower: 1,
 			},
 		}
@@ -95,10 +93,10 @@ func (gov *Governmint) RunTxParsed(tx types.Tx) tmsp.Result {
 
 func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) tmsp.Result {
 	// Ensure that proposer exists
-	entity, ok := gov.GetEntity(tx.EntityID)
+	entity, ok := gov.GetEntity(tx.EntityAddr)
 	if !ok {
 		return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
-			Fmt("Entity %v unknown", tx.EntityID))
+			Fmt("Entity %v unknown", tx.EntityAddr))
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
@@ -123,10 +121,10 @@ func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) tmsp.Result {
 
 func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
 	// Ensure that voter exists
-	entity, ok := gov.GetEntity(tx.Vote.EntityID)
+	entity, ok := gov.GetEntity(tx.Vote.EntityAddr)
 	if !ok {
 		return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
-			Fmt("Entity %v unknown", tx.Vote.EntityID))
+			Fmt("Entity %v unknown", tx.Vote.EntityAddr))
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
@@ -158,14 +156,14 @@ func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
 			Fmt("Vote group with id %v doesn't exist", aProposal.VoteGroupID))
 	}
 	// Ensure that the voter belongs to the voting group
-	if !isMemberOf(voteGroup, entity.ID) {
+	if !isMemberOf(voteGroup, entity.Addr) {
 		return tmsp.NewError(tmsp.CodeType_GovInvalidMember,
-			Fmt("Voter %v not a member of %v", entity.ID, voteGroup.ID))
+			Fmt("Voter %v not a member of %v", entity.Addr, voteGroup.ID))
 	}
 	// Ensure that the voter hasn't already voted
-	if exists, _ := hasVoted(aProposal, entity.ID); exists {
+	if exists, _ := hasVoted(aProposal, entity.Addr); exists {
 		return tmsp.NewError(tmsp.CodeType_GovDuplicateVote,
-			Fmt("Voter %v already voted", entity.ID))
+			Fmt("Voter %v already voted", entity.Addr))
 	}
 	// Good! Add a SignedVote
 	aProposal.SignedVotes = append(aProposal.SignedVotes, types.SignedVote{
@@ -193,7 +191,7 @@ func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
 		ID:      types.ValidatorsGroupID,
 		Version: 0,
 	}
-	for i, validator := range validators {
+	for _, validator := range validators {
 		var pubKey crypto.PubKey
 		err := wire.ReadBinaryBytes(validator.PubKey, &pubKey)
 		if err != nil {
@@ -201,13 +199,13 @@ func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
 		}
 		// Create an entity with this validator
 		entity := &types.Entity{
-			ID:     Fmt("%v", i),
+			Addr:   pubKey.Address(),
 			PubKey: pubKey,
 		}
 		gov.SetEntity(entity)
 		// Add as member
 		member := types.Member{
-			EntityID:    entity.ID,
+			EntityAddr:  entity.Addr,
 			VotingPower: validator.Power,
 		}
 		vGroup.Members = append(vGroup.Members, member)
@@ -240,9 +238,9 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 			Fmt("Vote group with id %v doesn't exist", p.VoteGroupID))
 	}
 	// Ensure that the proposer belongs to the voting group
-	if !isMemberOf(voteGroup, proposer.ID) {
+	if !isMemberOf(voteGroup, proposer.Addr) {
 		return tmsp.NewError(tmsp.CodeType_Unauthorized,
-			Fmt("Proposer %v is not member of %v", proposer.ID, voteGroup.ID))
+			Fmt("Proposer %X is not member of %v", proposer.Addr, voteGroup.ID))
 	}
 	// Type dependent checks
 	switch pInfo := p.Info.(type) {
@@ -269,11 +267,11 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 			}
 		}
 		// Ensure that all the entities exist
-		entityIDs := entityIDsFromMembers(pInfo.Members)
-		_, unknownEntityID := gov.loadEntities(entityIDs)
-		if unknownEntityID != "" {
+		entityAddrs := entityAddrsFromMembers(pInfo.Members)
+		_, unknownEntityAddr := gov.loadEntities(entityAddrs)
+		if unknownEntityAddr != nil {
 			return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
-				Fmt("Group creation with unknown entity %v", unknownEntityID))
+				Fmt("Group creation with unknown entity %X", unknownEntityAddr))
 		}
 	case *types.GroupUpdateProposalInfo:
 		// Ensure that the update group exists
@@ -303,11 +301,11 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 			}
 		}
 		// Ensure that all the entities exist
-		entityIDs := entityIDsFromMembers(pInfo.ChangedMembers)
-		_, unknownEntityID := gov.loadEntities(entityIDs)
-		if unknownEntityID != "" {
+		entityAddrs := entityAddrsFromMembers(pInfo.ChangedMembers)
+		_, unknownEntityAddr := gov.loadEntities(entityAddrs)
+		if unknownEntityAddr != nil {
 			return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
-				Fmt("Group creation with unknown entity %v", unknownEntityID))
+				Fmt("Group creation with unknown entity %X", unknownEntityAddr))
 		}
 	case *types.TextProposalInfo:
 		// TODO text string validation, e.g. max length
@@ -327,52 +325,52 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 }
 
 // Returns (true, "") if members are unique
-// Returns (false, <duplicateEntityID>) if members are not unique
+// Returns (false, <duplicateEntityAddr>) if members are not unique
 // NOTE: zero members is fine.
-func validateUniqueMembers(members []types.Member) (bool, string) {
-	entityIDs := map[string]struct{}{}
+func validateUniqueMembers(members []types.Member) (bool, []byte) {
+	entityAddrs := map[string]struct{}{}
 	for _, member := range members {
-		if _, exists := entityIDs[member.EntityID]; exists {
-			return false, member.EntityID
+		if _, exists := entityAddrs[string(member.EntityAddr)]; exists {
+			return false, member.EntityAddr
 		}
-		entityIDs[member.EntityID] = struct{}{}
+		entityAddrs[string(member.EntityAddr)] = struct{}{}
 	}
-	return true, ""
+	return true, nil
 }
 
-func entityIDsFromMembers(members []types.Member) []string {
-	entityIDs := make([]string, len(members))
+func entityAddrsFromMembers(members []types.Member) [][]byte {
+	entityAddrs := make([][]byte, len(members))
 	for i, member := range members {
-		entityIDs[i] = member.EntityID
+		entityAddrs[i] = member.EntityAddr
 	}
-	return entityIDs
+	return entityAddrs
 }
 
-// Returns (nil, <firstUnknownEntityID>) if any unknown
-func (gov *Governmint) loadEntities(entityIDs []string) ([]*types.Entity, string) {
-	entities := make([]*types.Entity, len(entityIDs))
-	for i, entityID := range entityIDs {
-		entity, ok := gov.GetEntity(entityID)
+// Returns (nil, <firstUnknownEntityAddr>) if any unknown
+func (gov *Governmint) loadEntities(entityAddrs [][]byte) ([]*types.Entity, []byte) {
+	entities := make([]*types.Entity, len(entityAddrs))
+	for i, entityAddr := range entityAddrs {
+		entity, ok := gov.GetEntity(entityAddr)
 		if !ok {
-			return nil, entityID
+			return nil, entityAddr
 		}
 		entities[i] = entity
 	}
-	return entities, ""
+	return entities, nil
 }
 
-func isMemberOf(group *types.Group, entityID string) bool {
+func isMemberOf(group *types.Group, entityAddr []byte) bool {
 	for _, member := range group.Members {
-		if member.EntityID == entityID {
+		if bytes.Equal(member.EntityAddr, entityAddr) {
 			return true
 		}
 	}
 	return false
 }
 
-func hasVoted(aProposal *types.ActiveProposal, entityID string) (bool, int) {
+func hasVoted(aProposal *types.ActiveProposal, entityAddr []byte) (bool, int) {
 	for i, sVote := range aProposal.SignedVotes {
-		if sVote.Vote.EntityID == entityID {
+		if bytes.Equal(sVote.Vote.EntityAddr, entityAddr) {
 			return true, i
 		}
 	}
@@ -410,8 +408,8 @@ func (gov *Governmint) setObject(key []byte, obj interface{}) {
 	}
 }
 
-func (gov *Governmint) GetEntity(id string) (entity *types.Entity, ok bool) {
-	obj := gov.getObject(types.EntityKey(id), &types.Entity{})
+func (gov *Governmint) GetEntity(addr []byte) (entity *types.Entity, ok bool) {
+	obj := gov.getObject(types.EntityKey(addr), &types.Entity{})
 	if obj == nil {
 		return nil, false
 	} else {
@@ -420,7 +418,7 @@ func (gov *Governmint) GetEntity(id string) (entity *types.Entity, ok bool) {
 }
 
 func (gov *Governmint) SetEntity(o *types.Entity) {
-	gov.setObject(types.EntityKey(o.ID), *o)
+	gov.setObject(types.EntityKey(o.Addr), *o)
 }
 
 func (gov *Governmint) GetGroup(id string) (group *types.Group, ok bool) {

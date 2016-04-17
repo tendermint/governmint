@@ -11,7 +11,7 @@ const (
 )
 
 type Entity struct {
-	ID     string        `json:"id"`
+	Addr   []byte        `json:"addr"`
 	PubKey crypto.PubKey `json:"pub_key"`
 }
 
@@ -23,17 +23,17 @@ type Group struct {
 }
 
 type Member struct {
-	EntityID    string `json:"entity_id"`
+	EntityAddr  []byte `json:"entity_addr"`
 	VotingPower uint64 `json:"voting_power"`
 }
 
-func NewMember(entityID string, votingPower uint64) Member {
-	return Member{entityID, votingPower}
+func NewMember(entityAddr []byte, votingPower uint64) Member {
+	return Member{entityAddr, votingPower}
 }
 
 type Vote struct {
 	Height     uint64 `json:"height"`
-	EntityID   string `json:"entity_id"`
+	EntityAddr []byte `json:"entity_addr"`
 	ProposalID string `json:"proposal_id"`
 	Value      string `json:"value"`
 }
@@ -117,9 +117,9 @@ var _ = wire.RegisterInterface(
 //----------------------------------------
 
 type ProposalTx struct {
-	EntityID  string           `json:"entity_id"`
-	Proposal  Proposal         `json:"proposal"`
-	Signature crypto.Signature `json:"signature"`
+	EntityAddr []byte           `json:"entity_addr"`
+	Proposal   Proposal         `json:"proposal"`
+	Signature  crypto.Signature `json:"signature"`
 }
 
 func (tx *ProposalTx) SignBytes() []byte { return tx.Proposal.SignBytes() }
@@ -150,25 +150,25 @@ var _ = wire.RegisterInterface(
 
 type GovMeta struct {
 	Height       uint64 // The current block height
-	NumEntities  int    // For EntityID generation
+	NumEntities  int    // For EntityAddr generation
 	NumGroups    int    // For GroupID generation
 	NumProposals int    // For ProposalID generation
 }
 
 //----------------------------------------
 
-func EntityKey(entityID string) []byte {
-	return []byte("GOV:e:" + entityID)
+func EntityKey(entityAddr []byte) []byte {
+	return append([]byte("gov/e/"), entityAddr...)
 }
 
 func GroupKey(groupID string) []byte {
-	return []byte("GOV:g:" + groupID)
+	return []byte("gov/g/" + groupID)
 }
 
 func ActiveProposalKey(proposalID string) []byte {
-	return []byte("GOV:ap:" + proposalID)
+	return []byte("gov/ap/" + proposalID)
 }
 
 func GovMetaKey() []byte {
-	return []byte("GOV:meta")
+	return []byte("gov/meta")
 }
