@@ -214,12 +214,18 @@ func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
 	gov.SetGroup(vGroup)
 }
 
+// TMSP::BeginBlock
+func (gov *Governmint) BeginBlock(height uint64) {
+	gov.GovMeta.Height = height
+	return
+}
+
 // TMSP::EndBlock
 func (gov *Governmint) EndBlock(height uint64) (changedValidators []*tmsp.Validator) {
-	gov.GovMeta.Height = height + 1
 	// Persist GovMeta
 	gov.SetGovMeta(gov.GovMeta)
-	// XXX Changed Validators
+	// Return changed validators
+	// XXX
 	return
 }
 

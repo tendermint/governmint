@@ -38,6 +38,9 @@ type Vote struct {
 	Value      string `json:"value"`
 }
 
+// XXX What about chainID?
+func (vote Vote) SignBytes() []byte { return wire.JSONBytes(vote) }
+
 type SignedVote struct {
 	Vote      Vote             `json:"vote"`
 	Signature crypto.Signature `json:"signature"`
@@ -46,8 +49,6 @@ type SignedVote struct {
 func NewSignedVote(vote Vote, sig crypto.Signature) SignedVote {
 	return SignedVote{vote, sig}
 }
-
-func (vote Vote) SignBytes() []byte { return wire.JSONBytes(vote) }
 
 type Proposal struct {
 	ID          string       `json:"id"`
@@ -123,6 +124,10 @@ type ProposalTx struct {
 }
 
 func (tx *ProposalTx) SignBytes() []byte { return tx.Proposal.SignBytes() }
+func (tx *ProposalTx) SetSignature(pub crypto.PubKey, sig crypto.Signature) bool {
+	tx.Signature = sig
+	return true
+}
 
 type VoteTx struct {
 	Vote      Vote             `json:"vote"`
@@ -130,9 +135,14 @@ type VoteTx struct {
 }
 
 func (tx *VoteTx) SignBytes() []byte { return tx.Vote.SignBytes() }
+func (tx *VoteTx) SetSignature(pub crypto.PubKey, sig crypto.Signature) bool {
+	tx.Signature = sig
+	return true
+}
 
 type Tx interface {
 	SignBytes() []byte
+	SetSignature(crypto.PubKey, crypto.Signature) bool
 }
 
 const (
