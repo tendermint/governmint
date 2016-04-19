@@ -24,7 +24,7 @@ func VoteTx(secret string, height uint64,
 	proposalID string, value string) *types.VoteTx {
 	vote := types.Vote{
 		Height:     height,
-		EntityID:   EntityID(secret),
+		EntityAddr: EntityAddr(secret),
 		ProposalID: proposalID,
 		Value:      value,
 	}
@@ -45,9 +45,9 @@ func ProposalTx(secret string, proposalID string, voteGroupID string,
 		Info:        info,
 	}
 	return &types.ProposalTx{
-		EntityID:  EntityID(secret),
-		Proposal:  proposal,
-		Signature: SignProposal(secret, proposal),
+		EntityAddr: EntityAddr(secret),
+		Proposal:   proposal,
+		Signature:  SignProposal(secret, proposal),
 	}
 }
 
@@ -63,7 +63,7 @@ func Entities(secrets []string) []PrivEntity {
 		privKey := crypto.GenPrivKeyEd25519FromSecret([]byte(secret))
 		entities[i] = PrivEntity{
 			Entity: types.Entity{
-				ID:     Fmt("id(%v)", secret),
+				Addr:   EntityAddr(secret),
 				PubKey: privKey.PubKey(),
 			},
 			PrivKey: privKey,
@@ -76,13 +76,13 @@ func Members(secrets []string, power uint64) []types.Member {
 	members := make([]types.Member, len(secrets))
 	for i, secret := range secrets {
 		members[i] = types.Member{
-			EntityID:    Fmt("id(%v)", secret),
+			EntityAddr:  EntityAddr(secret),
 			VotingPower: power,
 		}
 	}
 	return members
 }
 
-func EntityID(secret string) string {
-	return Fmt("id(%v)", secret)
+func EntityAddr(secret string) []byte {
+	return []byte(Fmt("id(%v)", secret))
 }

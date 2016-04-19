@@ -39,22 +39,22 @@ func TestUnit(t *testing.T) {
 		pubKey := privKey.PubKey()
 
 		gov.SetEntity(&types.Entity{
-			ID:     "my_entity_id",
+			Addr:   []byte("my_entity_id"),
 			PubKey: pubKey,
 		})
 
-		entityCopy, ok := gov.GetEntity("my_entity_id")
+		entityCopy, ok := gov.GetEntity([]byte("my_entity_id"))
 		if !ok {
 			t.Error("Saved(set) entity does not exist")
 		}
-		if entityCopy.ID != "my_entity_id" {
+		if string(entityCopy.Addr) != "my_entity_id" {
 			t.Error("Got wrong entity id")
 		}
 		if !pubKey.Equals(entityCopy.PubKey) {
 			t.Error("Got wrong entity pubkey")
 		}
 
-		entityBad, ok := gov.GetEntity("my_bad_id")
+		entityBad, ok := gov.GetEntity([]byte("my_bad_id"))
 		if ok || entityBad != nil {
 			t.Error("Expected nil entity")
 		}
@@ -67,7 +67,7 @@ func TestUnit(t *testing.T) {
 			Version: 1,
 			Members: []types.Member{
 				types.Member{
-					EntityID:    "my_entity_id",
+					EntityAddr:  []byte("my_entity_id"),
 					VotingPower: 1,
 				},
 			},
@@ -86,7 +86,7 @@ func TestUnit(t *testing.T) {
 		if len(groupCopy.Members) != 1 {
 			t.Error("Got wrong group members size")
 		}
-		if groupCopy.Members[0].EntityID != "my_entity_id" {
+		if string(groupCopy.Members[0].EntityAddr) != "my_entity_id" {
 			t.Error("Group member's entity id is wrong")
 		}
 
@@ -107,7 +107,7 @@ func TestUnit(t *testing.T) {
 					NextVersion:   1,
 					ChangedMembers: []types.Member{
 						types.Member{
-							EntityID:    "entity1",
+							EntityAddr:  []byte("entity1"),
 							VotingPower: 1,
 						},
 					},
@@ -119,7 +119,7 @@ func TestUnit(t *testing.T) {
 				types.SignedVote{
 					Vote: types.Vote{
 						Height:     123,
-						EntityID:   "entity1",
+						EntityAddr: []byte("entity1"),
 						ProposalID: "my_proposal_id",
 						Value:      "my_vote",
 					},

@@ -44,13 +44,14 @@ func (gov *Governmint) Info() string {
 func (gov *Governmint) SetOption(key string, value string) (log string) {
 	switch key {
 	case "admin":
-		// Read admin account
-		var adminEntity = new(types.Entity)
-		err := wire.ReadJSONBytes([]byte(value), adminEntity)
+		// Read entity
+		var entity = new(types.Entity)
+		err := wire.ReadJSONBytes([]byte(value), entity)
 		if err != nil {
-			return "Error decoding admin message: " + err.Error()
+			return "Error decoding admin entity: " + err.Error()
 		}
-		gov.SetEntity(adminEntity)
+		// Save entity
+		gov.SetEntity(entity)
 		// Construct a group for admin
 		adminGroup := &types.Group{
 			ID:      types.AdminGroupID,
@@ -58,13 +59,22 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 		}
 		adminGroup.Members = []types.Member{
 			types.Member{
-				EntityAddr:  adminEntity.Addr,
+				EntityAddr:  entity.Addr,
 				VotingPower: 1,
 			},
 		}
 		// Save admin group
 		gov.SetGroup(adminGroup)
 		return "Success"
+	case "entity":
+		// Read entity
+		var entity = new(types.Entity)
+		err := wire.ReadJSONBytes([]byte(value), entity)
+		if err != nil {
+			return "Error decoding entity: " + err.Error()
+		}
+		// Save entity
+		gov.SetEntity(entity)
 	}
 	return "Unrecognized governmint option key " + key
 }
