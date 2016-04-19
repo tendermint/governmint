@@ -2,6 +2,7 @@ package gov
 
 import (
 	"bytes"
+
 	base "github.com/tendermint/basecoin/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
@@ -84,7 +85,8 @@ func (gov *Governmint) RunTx(ctx base.CallContext, txBytes []byte) tmsp.Result {
 	var tx types.Tx
 	err := wire.ReadBinaryBytes(txBytes, &tx)
 	if err != nil {
-		return tmsp.ErrEncodingError.SetLog(Fmt("Error parsing Governmint tx bytes: %v", err.Error()))
+		return tmsp.ErrEncodingError.SetLog(
+			Fmt("Error parsing Governmint tx bytes: %v", err.Error()))
 	}
 	return gov.RunTxParsed(tx)
 }

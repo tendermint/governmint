@@ -152,8 +152,8 @@ const (
 
 var _ = wire.RegisterInterface(
 	struct{ Tx }{},
-	wire.ConcreteType{ProposalTx{}, TxTypeProposal},
-	wire.ConcreteType{VoteTx{}, TxTypeVote},
+	wire.ConcreteType{&ProposalTx{}, TxTypeProposal},
+	wire.ConcreteType{&VoteTx{}, TxTypeVote},
 )
 
 //----------------------------------------
