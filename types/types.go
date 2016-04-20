@@ -124,10 +124,6 @@ type ProposalTx struct {
 }
 
 func (tx *ProposalTx) SignBytes() []byte { return tx.Proposal.SignBytes() }
-func (tx *ProposalTx) SetSignature(pub crypto.PubKey, sig crypto.Signature) bool {
-	tx.Signature = sig
-	return true
-}
 
 type VoteTx struct {
 	Vote      Vote             `json:"vote"`
@@ -135,14 +131,9 @@ type VoteTx struct {
 }
 
 func (tx *VoteTx) SignBytes() []byte { return tx.Vote.SignBytes() }
-func (tx *VoteTx) SetSignature(pub crypto.PubKey, sig crypto.Signature) bool {
-	tx.Signature = sig
-	return true
-}
 
 type Tx interface {
 	SignBytes() []byte
-	SetSignature(crypto.PubKey, crypto.Signature) bool
 }
 
 const (
