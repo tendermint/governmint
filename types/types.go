@@ -150,10 +150,7 @@ var _ = wire.RegisterInterface(
 //----------------------------------------
 
 type GovMeta struct {
-	Height       uint64 // The current block height
-	NumEntities  int    // For EntityAddr generation
-	NumGroups    int    // For GroupID generation
-	NumProposals int    // For ProposalID generation
+	Height uint64 // The current block height
 }
 
 //----------------------------------------

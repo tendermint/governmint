@@ -2,13 +2,14 @@ package gov
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/tendermint/go-common"
 
 	base "github.com/tendermint/basecoin/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
 	"github.com/tendermint/governmint/types"
-	eyes "github.com/tendermint/merkleeyes/client"
 	tmsp "github.com/tendermint/tmsp/types"
 )
 
@@ -19,30 +20,18 @@ const (
 
 type Governmint struct {
 	*types.GovMeta
-	eyesCli *eyes.Client
 }
 
-func NewGovernmint(eyesCli *eyes.Client) *Governmint {
+func NewGovernmint() *Governmint {
 	gov := &Governmint{
 		GovMeta: &types.GovMeta{
-			Height:       0,
-			NumEntities:  0,
-			NumGroups:    0,
-			NumProposals: 0,
+			Height: 0,
 		},
-		eyesCli: eyesCli,
-	}
-	if meta, ok := gov.GetGovMeta(); ok {
-		gov.GovMeta = meta
 	}
 	return gov
 }
 
-func (gov *Governmint) Info() string {
-	return "Governmint v" + Version
-}
-
-func (gov *Governmint) SetOption(key string, value string) (log string) {
+func (gov *Governmint) SetOption(store base.KVStore, key string, value string) (log string) {
 	switch key {
 	case "admin":
 		// Read entity
@@ -52,7 +41,7 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 			return "Error decoding admin entity: " + err.Error()
 		}
 		// Save entity
-		gov.SetEntity(entity)
+		gov.SetEntity(store, entity)
 		// Construct a group for admin
 		adminGroup := &types.Group{
 			ID:      types.AdminGroupID,
@@ -65,7 +54,7 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 			},
 		}
 		// Save admin group
-		gov.SetGroup(adminGroup)
+		gov.SetGroup(store, adminGroup)
 		return "Success"
 	case "entity":
 		// Read entity
@@ -75,40 +64,40 @@ func (gov *Governmint) SetOption(key string, value string) (log string) {
 			return "Error decoding entity: " + err.Error()
 		}
 		// Save entity
-		gov.SetEntity(entity)
+		gov.SetEntity(store, entity)
 	}
 	return "Unrecognized governmint option key " + key
 }
 
 // Implements basecoin.Plugin
-func (gov *Governmint) RunTx(ctx base.CallContext, txBytes []byte) tmsp.Result {
+func (gov *Governmint) RunTx(store base.KVStore, ctx base.CallContext, txBytes []byte) tmsp.Result {
 	var tx types.Tx
 	err := wire.ReadBinaryBytes(txBytes, &tx)
 	if err != nil {
 		return tmsp.ErrEncodingError.SetLog(
 			Fmt("Error parsing Governmint tx bytes: %v", err.Error()))
 	}
-	return gov.RunTxParsed(tx)
+	return gov.RunTxParsed(store, tx)
 }
 
-func (gov *Governmint) RunTxParsed(tx types.Tx) tmsp.Result {
+func (gov *Governmint) RunTxParsed(store base.KVStore, tx types.Tx) tmsp.Result {
 	switch tx := tx.(type) {
 	case *types.ProposalTx:
-		return gov.RunProposalTx(tx)
+		return gov.RunProposalTx(store, tx)
 	case *types.VoteTx:
-		return gov.RunVoteTx(tx)
+		return gov.RunVoteTx(store, tx)
 	default:
 		PanicSanity("Unknown tx type")
 		return tmsp.NewError(tmsp.CodeType_InternalError, "Unknown tx type")
 	}
 }
 
-func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) tmsp.Result {
+func (gov *Governmint) RunProposalTx(store base.KVStore, tx *types.ProposalTx) tmsp.Result {
 	// Ensure that proposer exists
-	entity, ok := gov.GetEntity(tx.EntityAddr)
+	entity, ok := gov.GetEntity(store, tx.EntityAddr)
 	if !ok {
 		return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
-			Fmt("Entity %v unknown", tx.EntityAddr))
+			Fmt("Entity %X unknown", tx.EntityAddr))
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
@@ -117,7 +106,7 @@ func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) tmsp.Result {
 			Fmt("Invalid signature"))
 	}
 	// Ensure that the proposal is valid
-	tmspErr := gov.validateProposal(tx.Proposal, entity)
+	tmspErr := gov.validateProposal(store, tx.Proposal, entity)
 	if !tmspErr.IsOK() {
 		return tmspErr
 	}
@@ -127,16 +116,16 @@ func (gov *Governmint) RunProposalTx(tx *types.ProposalTx) tmsp.Result {
 		Proposal:    proposal,
 		SignedVotes: nil,
 	}
-	gov.SetActiveProposal(aProposal)
+	gov.SetActiveProposal(store, aProposal)
 	return tmsp.NewResultOK(nil, "Proposal created")
 }
 
-func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
+func (gov *Governmint) RunVoteTx(store base.KVStore, tx *types.VoteTx) tmsp.Result {
 	// Ensure that voter exists
-	entity, ok := gov.GetEntity(tx.Vote.EntityAddr)
+	entity, ok := gov.GetEntity(store, tx.Vote.EntityAddr)
 	if !ok {
 		return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
-			Fmt("Entity %v unknown", tx.Vote.EntityAddr))
+			Fmt("Entity %X unknown", tx.Vote.EntityAddr))
 	}
 	// Ensure signature is valid
 	signBytes := tx.SignBytes()
@@ -145,7 +134,7 @@ func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
 			Fmt("Invalid signature"))
 	}
 	// Ensure that the proposal exists
-	aProposal, ok := gov.GetActiveProposal(tx.Vote.ProposalID)
+	aProposal, ok := gov.GetActiveProposal(store, tx.Vote.ProposalID)
 	if !ok {
 		return tmsp.NewError(tmsp.CodeType_GovUnknownProposal,
 			Fmt("Unknown proposal %v", tx.Vote.ProposalID))
@@ -162,7 +151,7 @@ func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
 			Fmt("Vote height is invalid"))
 	}
 	// Fetch the proposal's voting group
-	voteGroup, ok := gov.GetGroup(aProposal.VoteGroupID)
+	voteGroup, ok := gov.GetGroup(store, aProposal.VoteGroupID)
 	if !ok {
 		return tmsp.NewError(tmsp.CodeType_GovUnknownGroup,
 			Fmt("Vote group with id %v doesn't exist", aProposal.VoteGroupID))
@@ -182,22 +171,12 @@ func (gov *Governmint) RunVoteTx(tx *types.VoteTx) tmsp.Result {
 		Vote:      tx.Vote,
 		Signature: tx.Signature,
 	})
-	gov.SetActiveProposal(aProposal)
+	gov.SetActiveProposal(store, aProposal)
 	return tmsp.NewResultOK(nil, "Vote added to ActiveProposal")
 }
 
-// TMSP::Query
-func (gov *Governmint) Query(query []byte) tmsp.Result {
-	return tmsp.OK.SetLog("Query not supported")
-}
-
-// TMSP::Commit
-func (gov *Governmint) Commit() tmsp.Result {
-	return tmsp.OK
-}
-
-// TMSP::InitChain
-func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
+func (gov *Governmint) InitChain(store base.KVStore, validators []*tmsp.Validator) {
+	fmt.Println(common.Red(Fmt(">> B")))
 	// Construct a group of entities for the validators.
 	vGroup := &types.Group{
 		ID:      types.ValidatorsGroupID,
@@ -214,7 +193,7 @@ func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
 			Addr:   pubKey.Address(),
 			PubKey: pubKey,
 		}
-		gov.SetEntity(entity)
+		gov.SetEntity(store, entity)
 		// Add as member
 		member := types.Member{
 			EntityAddr:  entity.Addr,
@@ -223,34 +202,33 @@ func (gov *Governmint) InitChain(validators []*tmsp.Validator) {
 		vGroup.Members = append(vGroup.Members, member)
 	}
 	// Save vGroup
-	gov.SetGroup(vGroup)
+	fmt.Println(common.Red(Fmt(">> %v", vGroup)))
+	gov.SetGroup(store, vGroup)
 }
 
-// TMSP::BeginBlock
-func (gov *Governmint) BeginBlock(height uint64) {
+func (gov *Governmint) BeginBlock(store base.KVStore, height uint64) {
+	if govMeta, ok := gov.GetGovMeta(store); ok {
+		gov.GovMeta = govMeta
+	}
 	gov.GovMeta.Height = height
 	return
 }
 
-// TMSP::EndBlock
-func (gov *Governmint) EndBlock(height uint64) (changedValidators []*tmsp.Validator) {
-	// Persist GovMeta
-	gov.SetGovMeta(gov.GovMeta)
-	// Return changed validators
-	// XXX
-	return
+func (gov *Governmint) EndBlock(store base.KVStore, height uint64) []*tmsp.Validator {
+	gov.SetGovMeta(store, gov.GovMeta)
+	return nil // XXX Return changes to validator set
 }
 
 //----------------------------------------
 
-func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity) (res tmsp.Result) {
+func (gov *Governmint) validateProposal(store base.KVStore, p types.Proposal, proposer *types.Entity) (res tmsp.Result) {
 	// Ensure that the proposal is unique
-	if _, exists := gov.GetActiveProposal(p.ID); exists {
+	if _, exists := gov.GetActiveProposal(store, p.ID); exists {
 		return tmsp.NewError(tmsp.CodeType_GovDuplicateProposal,
 			Fmt("Proposal with id %v already exists", p.ID))
 	}
 	// Ensure that the voting group exists
-	voteGroup, ok := gov.GetGroup(p.VoteGroupID)
+	voteGroup, ok := gov.GetGroup(store, p.VoteGroupID)
 	if !ok {
 		return tmsp.NewError(tmsp.CodeType_GovUnknownGroup,
 			Fmt("Vote group with id %v doesn't exist", p.VoteGroupID))
@@ -264,7 +242,7 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 	switch pInfo := p.Info.(type) {
 	case *types.GroupCreateProposalInfo:
 		// Ensure that the group ID is not taken
-		if _, exists := gov.GetGroup(pInfo.NewGroupID); exists {
+		if _, exists := gov.GetGroup(store, pInfo.NewGroupID); exists {
 			return tmsp.NewError(tmsp.CodeType_GovDuplicateGroup,
 				Fmt("Group with id %v already exists", pInfo.NewGroupID))
 		}
@@ -286,14 +264,14 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 		}
 		// Ensure that all the entities exist
 		entityAddrs := entityAddrsFromMembers(pInfo.Members)
-		_, unknownEntityAddr := gov.loadEntities(entityAddrs)
+		_, unknownEntityAddr := gov.loadEntities(store, entityAddrs)
 		if unknownEntityAddr != nil {
 			return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
 				Fmt("Group creation with unknown entity %X", unknownEntityAddr))
 		}
 	case *types.GroupUpdateProposalInfo:
 		// Ensure that the update group exists
-		updateGroup, ok := gov.GetGroup(pInfo.UpdateGroupID)
+		updateGroup, ok := gov.GetGroup(store, pInfo.UpdateGroupID)
 		if !ok {
 			return tmsp.NewError(tmsp.CodeType_GovUnknownGroup,
 				Fmt("Group with id %v doesn't exist", pInfo.UpdateGroupID))
@@ -320,7 +298,7 @@ func (gov *Governmint) validateProposal(p types.Proposal, proposer *types.Entity
 		}
 		// Ensure that all the entities exist
 		entityAddrs := entityAddrsFromMembers(pInfo.ChangedMembers)
-		_, unknownEntityAddr := gov.loadEntities(entityAddrs)
+		_, unknownEntityAddr := gov.loadEntities(store, entityAddrs)
 		if unknownEntityAddr != nil {
 			return tmsp.NewError(tmsp.CodeType_GovUnknownEntity,
 				Fmt("Group creation with unknown entity %X", unknownEntityAddr))
@@ -365,10 +343,10 @@ func entityAddrsFromMembers(members []types.Member) [][]byte {
 }
 
 // Returns (nil, <firstUnknownEntityAddr>) if any unknown
-func (gov *Governmint) loadEntities(entityAddrs [][]byte) ([]*types.Entity, []byte) {
+func (gov *Governmint) loadEntities(store base.KVStore, entityAddrs [][]byte) ([]*types.Entity, []byte) {
 	entities := make([]*types.Entity, len(entityAddrs))
 	for i, entityAddr := range entityAddrs {
-		entity, ok := gov.GetEntity(entityAddr)
+		entity, ok := gov.GetEntity(store, entityAddr)
 		if !ok {
 			return nil, entityAddr
 		}
@@ -400,15 +378,12 @@ func hasVoted(aProposal *types.ActiveProposal, entityAddr []byte) (bool, int) {
 // Get some object, or panic.
 // objPtr: pointer to the object to populate, if value exists for key
 // Use the return value, so nil can be returned for keys with no value.
-func (gov *Governmint) getObject(key []byte, objPtr interface{}) interface{} {
-	res := gov.eyesCli.GetSync(key)
-	if res.IsErr() {
-		panic("Error getting obj: " + res.Error())
-	}
-	if len(res.Data) == 0 {
+func (gov *Governmint) getObject(store base.KVStore, key []byte, objPtr interface{}) interface{} {
+	valueBytes := store.Get(key)
+	if len(valueBytes) == 0 {
 		return nil // NOTE must use return value
 	}
-	err := wire.ReadBinaryBytes(res.Data, objPtr)
+	err := wire.ReadBinaryBytes(valueBytes, objPtr)
 	if err != nil {
 		panic("Error parsing obj: " + err.Error())
 	}
@@ -418,16 +393,13 @@ func (gov *Governmint) getObject(key []byte, objPtr interface{}) interface{} {
 // Set some object, or panic
 // If obj is a concrete type of an interface,
 // remember to wrap in struct{MyInterface}{obj}.
-func (gov *Governmint) setObject(key []byte, obj interface{}) {
+func (gov *Governmint) setObject(store base.KVStore, key []byte, obj interface{}) {
 	objBytes := wire.BinaryBytes(obj)
-	res := gov.eyesCli.SetSync(key, objBytes)
-	if res.IsErr() {
-		panic("Error setting obj: " + res.Error())
-	}
+	store.Set(key, objBytes)
 }
 
-func (gov *Governmint) GetEntity(addr []byte) (entity *types.Entity, ok bool) {
-	obj := gov.getObject(types.EntityKey(addr), &types.Entity{})
+func (gov *Governmint) GetEntity(store base.KVStore, addr []byte) (entity *types.Entity, ok bool) {
+	obj := gov.getObject(store, types.EntityKey(addr), &types.Entity{})
 	if obj == nil {
 		return nil, false
 	} else {
@@ -435,12 +407,12 @@ func (gov *Governmint) GetEntity(addr []byte) (entity *types.Entity, ok bool) {
 	}
 }
 
-func (gov *Governmint) SetEntity(o *types.Entity) {
-	gov.setObject(types.EntityKey(o.Addr), *o)
+func (gov *Governmint) SetEntity(store base.KVStore, o *types.Entity) {
+	gov.setObject(store, types.EntityKey(o.Addr), *o)
 }
 
-func (gov *Governmint) GetGroup(id string) (group *types.Group, ok bool) {
-	obj := gov.getObject(types.GroupKey(id), &types.Group{})
+func (gov *Governmint) GetGroup(store base.KVStore, id string) (group *types.Group, ok bool) {
+	obj := gov.getObject(store, types.GroupKey(id), &types.Group{})
 	if obj == nil {
 		return nil, false
 	} else {
@@ -448,12 +420,12 @@ func (gov *Governmint) GetGroup(id string) (group *types.Group, ok bool) {
 	}
 }
 
-func (gov *Governmint) SetGroup(o *types.Group) {
-	gov.setObject(types.GroupKey(o.ID), *o)
+func (gov *Governmint) SetGroup(store base.KVStore, o *types.Group) {
+	gov.setObject(store, types.GroupKey(o.ID), *o)
 }
 
-func (gov *Governmint) GetActiveProposal(id string) (ap *types.ActiveProposal, ok bool) {
-	obj := gov.getObject(types.ActiveProposalKey(id), &types.ActiveProposal{})
+func (gov *Governmint) GetActiveProposal(store base.KVStore, id string) (ap *types.ActiveProposal, ok bool) {
+	obj := gov.getObject(store, types.ActiveProposalKey(id), &types.ActiveProposal{})
 	if obj == nil {
 		return nil, false
 	} else {
@@ -461,12 +433,12 @@ func (gov *Governmint) GetActiveProposal(id string) (ap *types.ActiveProposal, o
 	}
 }
 
-func (gov *Governmint) SetActiveProposal(o *types.ActiveProposal) {
-	gov.setObject(types.ActiveProposalKey(o.Proposal.ID), *o)
+func (gov *Governmint) SetActiveProposal(store base.KVStore, o *types.ActiveProposal) {
+	gov.setObject(store, types.ActiveProposalKey(o.Proposal.ID), *o)
 }
 
-func (gov *Governmint) GetGovMeta() (ap *types.GovMeta, ok bool) {
-	obj := gov.getObject(types.GovMetaKey(), &types.GovMeta{})
+func (gov *Governmint) GetGovMeta(store base.KVStore) (ap *types.GovMeta, ok bool) {
+	obj := gov.getObject(store, types.GovMetaKey(), &types.GovMeta{})
 	if obj == nil {
 		return nil, false
 	} else {
@@ -474,6 +446,6 @@ func (gov *Governmint) GetGovMeta() (ap *types.GovMeta, ok bool) {
 	}
 }
 
-func (gov *Governmint) SetGovMeta(o *types.GovMeta) {
-	gov.setObject(types.GovMetaKey(), *o)
+func (gov *Governmint) SetGovMeta(store base.KVStore, o *types.GovMeta) {
+	gov.setObject(store, types.GovMetaKey(), *o)
 }

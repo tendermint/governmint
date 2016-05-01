@@ -1,49 +1,27 @@
 package gov
 
 import (
+	base "github.com/tendermint/basecoin/types"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/governmint/types"
-	eyesApp "github.com/tendermint/merkleeyes/app"
-	eyes "github.com/tendermint/merkleeyes/client"
-	"github.com/tendermint/tmsp/server"
 	"testing"
 )
 
-func makeMerkleEyesServer(addr string) *server.Server {
-	app := eyesApp.NewMerkleEyesApp()
-	s, err := server.NewServer(addr, app)
-	if err != nil {
-		panic("starting MerkleEyes listener: " + err.Error())
-	}
-	return s
-}
-
-func makeMerkleEyesClient(addr string) *eyes.Client {
-	c, err := eyes.NewClient("unix://test.sock")
-	if err != nil {
-		panic("creating MerkleEyes client: " + err.Error())
-	}
-	return c
-}
-
 func TestUnit(t *testing.T) {
-	s := makeMerkleEyesServer("unix://test.sock")
-	defer s.Stop()
-	c := makeMerkleEyesClient("unix://test.sock")
-	defer c.Stop()
-	gov := NewGovernmint(c)
+	gov := NewGovernmint()
 
 	// Test Entity
 	{
+		store := base.NewMemKVStore()
 		privKey := crypto.GenPrivKeyEd25519()
 		pubKey := privKey.PubKey()
 
-		gov.SetEntity(&types.Entity{
+		gov.SetEntity(store, &types.Entity{
 			Addr:   []byte("my_entity_id"),
 			PubKey: pubKey,
 		})
 
-		entityCopy, ok := gov.GetEntity([]byte("my_entity_id"))
+		entityCopy, ok := gov.GetEntity(store, []byte("my_entity_id"))
 		if !ok {
 			t.Error("Saved(set) entity does not exist")
 		}
@@ -54,7 +32,7 @@ func TestUnit(t *testing.T) {
 			t.Error("Got wrong entity pubkey")
 		}
 
-		entityBad, ok := gov.GetEntity([]byte("my_bad_id"))
+		entityBad, ok := gov.GetEntity(store, []byte("my_bad_id"))
 		if ok || entityBad != nil {
 			t.Error("Expected nil entity")
 		}
@@ -62,7 +40,8 @@ func TestUnit(t *testing.T) {
 
 	// Test Group
 	{
-		gov.SetGroup(&types.Group{
+		store := base.NewMemKVStore()
+		gov.SetGroup(store, &types.Group{
 			ID:      "my_group_id",
 			Version: 1,
 			Members: []types.Member{
@@ -73,7 +52,7 @@ func TestUnit(t *testing.T) {
 			},
 		})
 
-		groupCopy, ok := gov.GetGroup("my_group_id")
+		groupCopy, ok := gov.GetGroup(store, "my_group_id")
 		if !ok {
 			t.Error("Saved(set) group does not exist")
 		}
@@ -90,7 +69,7 @@ func TestUnit(t *testing.T) {
 			t.Error("Group member's entity id is wrong")
 		}
 
-		groupBad, ok := gov.GetGroup("my_bad_id")
+		groupBad, ok := gov.GetGroup(store, "my_bad_id")
 		if ok || groupBad != nil {
 			t.Error("Expected nil group")
 		}
@@ -98,6 +77,7 @@ func TestUnit(t *testing.T) {
 
 	// Test ActiveProposal
 	{
+		store := base.NewMemKVStore()
 		ap := &types.ActiveProposal{
 			Proposal: types.Proposal{
 				ID:          "my_proposal_id",
@@ -127,10 +107,10 @@ func TestUnit(t *testing.T) {
 				},
 			},
 		}
-		gov.SetActiveProposal(ap)
+		gov.SetActiveProposal(store, ap)
 		proposalID := ap.Proposal.ID
 
-		apCopy, ok := gov.GetActiveProposal(proposalID)
+		apCopy, ok := gov.GetActiveProposal(store, proposalID)
 		if !ok {
 			t.Error("Saved(set) ap does not exist")
 		}
@@ -150,7 +130,7 @@ func TestUnit(t *testing.T) {
 			t.Error("Got wrong ap proposal votes size")
 		}
 
-		apBad, ok := gov.GetActiveProposal("my_bad_id")
+		apBad, ok := gov.GetActiveProposal(store, "my_bad_id")
 		if ok || apBad != nil {
 			t.Error("Expected nil ap")
 		}
