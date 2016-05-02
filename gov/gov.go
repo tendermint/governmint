@@ -277,9 +277,10 @@ func (gov *Governmint) validateProposal(store base.KVStore, p types.Proposal, pr
 				Fmt("Group with id %v doesn't exist", pInfo.UpdateGroupID))
 		}
 		// Ensure that the update group's parent is the voting group
+		// XXX Admin check?
 		if updateGroup.ParentID != voteGroup.ID {
 			return tmsp.NewError(tmsp.CodeType_Unauthorized,
-				Fmt("Voting group %v cannot update %v", voteGroup.ID, updateGroup.ID))
+				Fmt("Group %v cannot update %v", voteGroup.ID, updateGroup.ID))
 		}
 		// Ensure that the member entities are unique
 		if ok, dupe := validateUniqueMembers(pInfo.ChangedMembers); !ok {
